@@ -12,6 +12,7 @@ import { faCircle as faCircleRegular } from "@fortawesome/free-regular-svg-icons
 import { faGithub, faTwitter } from "@fortawesome/free-brands-svg-icons";
 import "@fortawesome/fontawesome-svg-core/styles.css";
 import type { PropsWithChildren } from "react";
+import { Titlebar } from "@/components/Titlebar";
 
 faConfig.autoAddCss = false;
 library.add(
@@ -25,5 +26,12 @@ library.add(
 );
 
 export function Providers({ children }: PropsWithChildren) {
-  return <HeroUIProvider>{children}</HeroUIProvider>;
+  return (
+    <HeroUIProvider>
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+        <Titlebar />
+        <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
+      </div>
+    </HeroUIProvider>
+  );
 }

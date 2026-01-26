@@ -1,14 +1,50 @@
 @import "tailwindcss";
 
 :root {
-  --color-base: #0f1115;
-  --color-surface: #161a20;
-  --color-slate: #1f2530;
-  --color-accent: #2d9aa6;
-  --color-navy: #243044;
-  --color-amber: #d4a72c;
-  --color-text: #e7e9ed;
-  --color-muted: #9aa3b5;
+  /* Core UI - Dark Mode */
+  --dark-bg-canvas: #191919; /* main page/workspace background */
+  --dark-bg-sidebar: #202020; /* sidebar / nav + titlebar */
+  --dark-bg-widget: #191919; /* embeds/cards */
+  --dark-bg-hover: #3f4448; /* hover states */
+  --dark-bg-selected: #4a5054; /* active/selected */
+  --dark-divider: #252525; /* borders/dividers */
+
+  --dark-text-primary: #ffffff;
+  --dark-text-secondary: #ededed;
+  --dark-text-muted: #9b9b9b;
+  --dark-text-placeholder: #757575;
+
+  --gray-text: #9b9b9b;
+  --gray-bg: #252525;
+  --brown-text: #a27763;
+  --brown-bg: #2e2724;
+  --orange-text: #cb7b37;
+  --orange-bg: #36291f;
+  --yellow-text: #c19138;
+  --yellow-bg: #372e20;
+  --green-text: #4f9768;
+  --green-bg: #242b26;
+  --blue-text: #447acb;
+  --blue-bg: #1f282d;
+  --purple-text: #865dbb;
+  --purple-bg: #2a2430;
+  --pink-text: #e55c9a;
+  --pink-bg: #33202a;
+  --red-text: #d93f3f;
+  --red-bg: #3a1f1f;
+
+  --dark-border: #333333;
+  --dark-shadow: rgba(0, 0, 0, 0.6);
+
+  /* Map to app tokens */
+  --color-base: var(--dark-bg-canvas);
+  --color-surface: var(--dark-bg-widget);
+  --color-slate: var(--blue-bg);
+  --color-accent: var(--blue-text);
+  --color-navy: var(--dark-bg-sidebar);
+  --color-amber: var(--yellow-text);
+  --color-text: var(--dark-text-primary);
+  --color-muted: var(--dark-text-muted);
 }
 
 @theme inline {
@@ -22,4 +58,5 @@ body {
   background: var(--color-base);
   color: var(--color-text);
   font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  overflow: hidden;
 }
