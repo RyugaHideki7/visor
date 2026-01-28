@@ -12,7 +12,7 @@ import { faCircle as faCircleRegular } from "@fortawesome/free-regular-svg-icons
 import { faGithub, faTwitter } from "@fortawesome/free-brands-svg-icons";
 import "@fortawesome/fontawesome-svg-core/styles.css";
 import type { PropsWithChildren } from "react";
-import { Titlebar } from "@/components/Titlebar";
+import { Titlebar } from "@/shared/ui/Titlebar";
 
 faConfig.autoAddCss = false;
 library.add(
