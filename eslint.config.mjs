@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Tauri generated assets (binary) - ignore for lint
+    "src-tauri/target/**",
   ]),
 ]);
 

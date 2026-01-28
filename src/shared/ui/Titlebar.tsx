@@ -1,10 +1,13 @@
 "use client";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faMinus, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faChevronLeft, faMinus, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { faSquare as faSquareRegular } from "@fortawesome/free-regular-svg-icons";
+import Image from "next/image";
+import { motion, useReducedMotion } from "framer-motion";
 import type { CSSProperties } from "react";
 import { useState } from "react";
+import { useSidebar } from "@/shared/contexts/sidebar";
 import {
   closeWindow,
   minimizeWindow,
@@ -15,6 +18,8 @@ const barColor = "var(--dark-bg-sidebar)";
 
 export function Titlebar() {
   const [hovered, setHovered] = useState<"min" | "max" | "close" | null>(null);
+  const { isExpanded, toggle } = useSidebar();
+  const prefersReducedMotion = useReducedMotion();
 
   const handleMinimize = async () => {
     await minimizeWindow();
@@ -53,7 +58,35 @@ export function Titlebar() {
           fontSize: 12,
         }}
       >
-        <img
+        <motion.button
+          type="button"
+          aria-label={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
+          data-tauri-drag-region="false"
+          onClick={toggle}
+          whileTap={{ scale: prefersReducedMotion ? 1 : 0.95 }}
+          whileHover={{ scale: prefersReducedMotion ? 1 : 1.02 }}
+          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+          style={{
+            background: "transparent",
+            border: "none",
+            display: "grid",
+            placeItems: "center",
+            width: 28,
+            height: 28,
+            color: "var(--dark-text-secondary)",
+            cursor: "pointer",
+          }}
+        >
+          <motion.span
+            animate={{ rotate: isExpanded ? 0 : 180 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.25, ease: "easeOut" }}
+            style={{ display: "grid", placeItems: "center" }}
+          >
+            <FontAwesomeIcon icon={faChevronLeft} className="h-3 w-3" />
+          </motion.span>
+        </motion.button>
+
+        <Image
           src="/visor-logo-white.svg"
           alt="Visor"
           width={16}
