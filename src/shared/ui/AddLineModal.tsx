@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFolderOpen } from "@fortawesome/free-solid-svg-icons";
+import { open } from "@tauri-apps/plugin-dialog";
 import { 
   Modal, 
   ModalContent, 
@@ -83,6 +84,25 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
     onClose();
   };
 
+  const pickFolder = async (initialPath?: string) => {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        defaultPath: initialPath && initialPath.length > 0 ? initialPath : undefined,
+      });
+
+      if (typeof selected === "string") {
+        return selected;
+      }
+
+      return null;
+    } catch (e) {
+      console.error("Failed to open folder picker:", e);
+      return null;
+    }
+  };
+
   return (
     <Modal 
       isOpen={isOpen} 
@@ -129,7 +149,16 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
                 onValueChange={(val) => setFormData({ ...formData, path: val })}
                 variant="bordered"
                 endContent={
-                  <Button isIconOnly size="sm" variant="light" className="text-[var(--text-tertiary)]">
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="light"
+                    className="text-[var(--text-tertiary)]"
+                    onPress={async () => {
+                      const picked = await pickFolder(formData.path);
+                      if (picked) setFormData((prev) => ({ ...prev, path: picked }));
+                    }}
+                  >
                     <FontAwesomeIcon icon={faFolderOpen} />
                   </Button>
                 }
@@ -162,6 +191,20 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
                   value={formData.archived_path ?? ""}
                   onValueChange={(val) => setFormData({ ...formData, archived_path: val })}
                   variant="bordered"
+                  endContent={
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      variant="light"
+                      className="text-[var(--text-tertiary)]"
+                      onPress={async () => {
+                        const picked = await pickFolder(formData.archived_path);
+                        if (picked) setFormData((prev) => ({ ...prev, archived_path: picked }));
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faFolderOpen} />
+                    </Button>
+                  }
                   className="flex-1"
                   classNames={{
                     label: "text-[var(--text-secondary)]",
@@ -279,6 +322,20 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
                     value={formData.log_path ?? ""}
                     onValueChange={(val) => setFormData({ ...formData, log_path: val })}
                     variant="bordered"
+                    endContent={
+                      <Button
+                        isIconOnly
+                        size="sm"
+                        variant="light"
+                        className="text-[var(--text-tertiary)]"
+                        onPress={async () => {
+                          const picked = await pickFolder(formData.log_path);
+                          if (picked) setFormData((prev) => ({ ...prev, log_path: picked }));
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faFolderOpen} />
+                      </Button>
+                    }
                     className="flex-1"
                     classNames={{
                       label: "text-[var(--text-secondary)]",

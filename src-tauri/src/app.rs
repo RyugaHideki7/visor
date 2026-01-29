@@ -2,6 +2,7 @@ use tauri::Manager;
 
 pub fn run_app() {
   tauri::Builder::default()
+    .plugin(tauri_plugin_dialog::init())
     .setup(|app| {
       crate::logging::setup(app)?;
 
