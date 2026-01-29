@@ -117,6 +117,28 @@
 body {
   background: var(--bg-primary);
   color: var(--text-primary);
+}
+
+select.visor-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+}
+
+select.visor-select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+select.visor-select option {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+body {
   font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
   overflow: hidden;
   transition: background-color 0.2s ease, color 0.2s ease;
