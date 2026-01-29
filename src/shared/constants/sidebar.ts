@@ -6,11 +6,13 @@ import {
   faFolderOpen,
   faGaugeHigh,
   faGear,
+  faIndustry,
 } from "@fortawesome/free-solid-svg-icons";
 
 export const SIDEBAR_ITEMS = [
-  { key: "dashboard", label: "Dashboard", icon: faGaugeHigh, href: "/" },
-  { key: "projects", label: "Projects", icon: faFolderOpen, href: "/projects" },
-  { key: "activity", label: "Activity", icon: faChartSimple, href: "/activity" },
-  { key: "settings", label: "Settings", icon: faGear, href: "/settings" },
+  { key: "dashboard", label: "Tableau de bord", icon: faGaugeHigh, href: "/" },
+  { key: "lines", label: "Lignes de production", icon: faIndustry, href: "/lines" },
+  { key: "mapping", label: "Mapping", icon: faFolderOpen, href: "/mapping" },
+  { key: "logs", label: "Journaux", icon: faChartSimple, href: "/journaux" },
+  { key: "settings", label: "Paramètres", icon: faGear, href: "/settings" },
 ];

@@ -1,6 +1,8 @@
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 mod app;
+mod commands;
+mod db;
 mod logging;
+mod stock;
 
 pub fn run() {
   app::run_app();

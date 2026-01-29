@@ -29,7 +29,7 @@ library.add(
 
 export function Providers({ children }: PropsWithChildren) {
   return (
-    <HeroUIProvider>
+    <HeroUIProvider className="dark">
       <SidebarProvider>
         <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
           <Titlebar />
