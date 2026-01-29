@@ -103,15 +103,18 @@ export default function MappingPage() {
     <div className="p-8 flex flex-col gap-6">
       <div className="flex justify-between items-start gap-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">Mapping</h1>
-          <p className="text-gray-400 text-sm">
+          <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Mapping</h1>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
             Associez les colonnes du fichier et/ou des paramètres de la ligne aux champs SQL.
           </p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={handleAddRow}
-            className="flex items-center gap-2 px-4 py-2 bg-[#333] text-white rounded-lg hover:bg-[#444] transition-colors cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors cursor-pointer"
+            style={{ background: "var(--button-secondary-bg)", color: "var(--text-primary)" }}
+            onMouseEnter={(e) => e.currentTarget.style.background = "var(--button-secondary-hover)"}
+            onMouseLeave={(e) => e.currentTarget.style.background = "var(--button-secondary-bg)"}
           >
             <FontAwesomeIcon icon={faPlus} />
             Ajouter
@@ -119,7 +122,10 @@ export default function MappingPage() {
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+            style={{ background: "var(--button-primary-bg)", color: "white" }}
+            onMouseEnter={(e) => !isSaving && (e.currentTarget.style.background = "var(--button-primary-hover)")}
+            onMouseLeave={(e) => e.currentTarget.style.background = "var(--button-primary-bg)"}
           >
             {isSaving ? "..." : "Sauvegarder"}
           </button>
@@ -127,11 +133,12 @@ export default function MappingPage() {
       </div>
 
       <div className="max-w-md">
-        <label className="block text-sm text-gray-400 mb-2">Ligne</label>
+        <label className="block text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Ligne</label>
         <select
           value={selectedLineId}
           onChange={(e) => setSelectedLineId(e.target.value)}
-          className="w-full px-3 py-2 bg-[#191919] border border-[#333] rounded-lg text-white focus:border-blue-500 focus:outline-none cursor-pointer"
+          className="w-full px-3 py-2 rounded-lg focus:outline-none cursor-pointer"
+          style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
         >
           <option value="">Sélectionner une ligne</option>
           {lines.map((l) => (
@@ -142,80 +149,94 @@ export default function MappingPage() {
         </select>
       </div>
 
-      <div className="bg-[#202020] rounded-lg border border-[#333] overflow-hidden">
+      <div style={{ background: "var(--bg-secondary)", borderRadius: 8, border: "1px solid var(--border-default)", overflow: "hidden" }}>
         <table className="w-full">
           <thead>
-            <tr className="border-b border-[#333] text-left text-sm text-gray-400">
-              <th className="px-4 py-3 font-medium">CHAMP SQL</th>
-              <th className="px-4 py-3 font-medium">COLONNE</th>
-              <th className="px-4 py-3 font-medium">PARAMÈTRE</th>
-              <th className="px-4 py-3 font-medium">TRANSFORMATION</th>
-              <th className="px-4 py-3 font-medium">DESCRIPTION</th>
-              <th className="px-4 py-3 font-medium">ACTIONS</th>
+            <tr style={{ borderBottom: "1px solid var(--border-default)", textAlign: "left", fontSize: 14, color: "var(--text-tertiary)" }}>
+              <th style={{ padding: "12px 16px", fontWeight: 500 }}>CHAMP SQL</th>
+              <th style={{ padding: "12px 16px", fontWeight: 500 }}>COLONNE</th>
+              <th style={{ padding: "12px 16px", fontWeight: 500 }}>PARAMÈTRE</th>
+              <th style={{ padding: "12px 16px", fontWeight: 500 }}>TRANSFORMATION</th>
+              <th style={{ padding: "12px 16px", fontWeight: 500 }}>DESCRIPTION</th>
+              <th style={{ padding: "12px 16px", fontWeight: 500 }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={6} style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-tertiary)" }}>
                   Aucun mapping pour cette ligne.
                 </td>
               </tr>
             ) : (
               rows.map((r, idx) => (
-                <tr key={`${r.id ?? "new"}-${idx}`} className="border-b border-[#333] last:border-b-0">
-                  <td className="px-2 py-2">
+                <tr key={`${r.id ?? "new"}-${idx}`} style={{ borderBottom: "1px solid var(--border-default)" }}>
+                  <td style={{ padding: "8px" }}>
                     <input
                       type="text"
                       value={r.sql_field}
                       onChange={(e) => handleUpdateRow(idx, { sql_field: e.target.value })}
-                      className="w-full px-2 py-1 bg-[#191919] border border-[#333] rounded text-white text-sm focus:border-blue-500 focus:outline-none"
+                      className="w-full px-2 py-1 rounded text-sm focus:outline-none"
+                      style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
                       placeholder="ex: YSCC_0"
                     />
                   </td>
-                  <td className="px-2 py-2">
+                  <td style={{ padding: "8px" }}>
                     <input
                       type="text"
                       value={r.file_column ?? ""}
                       onChange={(e) => handleUpdateRow(idx, { file_column: e.target.value })}
-                      className="w-full px-2 py-1 bg-[#191919] border border-[#333] rounded text-white text-sm focus:border-blue-500 focus:outline-none"
+                      className="w-full px-2 py-1 rounded text-sm focus:outline-none"
+                      style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
                       placeholder="ex: 0"
                     />
                   </td>
-                  <td className="px-2 py-2">
+                  <td style={{ padding: "8px" }}>
                     <input
                       type="text"
                       value={r.parameter ?? ""}
                       onChange={(e) => handleUpdateRow(idx, { parameter: e.target.value })}
-                      className="w-full px-2 py-1 bg-[#191919] border border-[#333] rounded text-white text-sm focus:border-blue-500 focus:outline-none"
+                      className="w-full px-2 py-1 rounded text-sm focus:outline-none"
+                      style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
                       placeholder="ex: site"
                     />
                   </td>
-                  <td className="px-2 py-2">
+                  <td style={{ padding: "8px" }}>
                     <input
                       type="text"
                       value={r.transformation ?? ""}
                       onChange={(e) => handleUpdateRow(idx, { transformation: e.target.value })}
-                      className="w-full px-2 py-1 bg-[#191919] border border-[#333] rounded text-white text-sm focus:border-blue-500 focus:outline-none"
+                      className="w-full px-2 py-1 rounded text-sm focus:outline-none"
+                      style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
                       placeholder="ex: date"
                     />
                   </td>
-                  <td className="px-2 py-2">
+                  <td style={{ padding: "8px" }}>
                     <input
                       type="text"
                       value={r.description ?? ""}
                       onChange={(e) => handleUpdateRow(idx, { description: e.target.value })}
-                      className="w-full px-2 py-1 bg-[#191919] border border-[#333] rounded text-white text-sm focus:border-blue-500 focus:outline-none"
+                      className="w-full px-2 py-1 rounded text-sm focus:outline-none"
+                      style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
                       placeholder="Description"
                     />
                   </td>
-                  <td className="px-2 py-2">
+                  <td style={{ padding: "8px" }}>
                     <button
                       onClick={() => handleDeleteRow(idx)}
-                      className="p-2 rounded-lg hover:bg-red-500/20 transition-colors cursor-pointer"
+                      className="p-2 rounded-lg transition-colors cursor-pointer"
+                      style={{ color: "var(--text-tertiary)" }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "var(--color-error-bg)";
+                        e.currentTarget.style.color = "var(--color-error)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "transparent";
+                        e.currentTarget.style.color = "var(--text-tertiary)";
+                      }}
                       title="Supprimer"
                     >
-                      <FontAwesomeIcon icon={faTrash} className="text-gray-400 hover:text-red-400" />
+                      <FontAwesomeIcon icon={faTrash} />
                     </button>
                   </td>
                 </tr>

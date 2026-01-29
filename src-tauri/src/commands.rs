@@ -15,7 +15,34 @@ pub struct Line {
     pub interval_alert: i64,
     pub archived_path: Option<String>,
     pub active: bool,
-    pub created_at: Option<String>, // simplified datetime for now
+    pub site: Option<String>,
+    pub unite: Option<String>,
+    pub flag_dec: Option<String>,
+    pub code_ligne: Option<String>,
+    pub log_path: Option<String>,
+    pub file_format: Option<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct SqlServerConfig {
+    pub id: i64,
+    pub server: Option<String>,
+    pub database: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct LogEntry {
+    pub id: i64,
+    pub line_id: Option<i64>,
+    pub level: String,
+    pub source: Option<String>,
+    pub message: String,
+    pub details: Option<String>,
+    pub created_at: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -44,7 +71,8 @@ pub struct MappingRow {
 #[tauri::command]
 pub async fn get_lines(state: State<'_, DbState>) -> Result<Vec<Line>, String> {
     let lines = sqlx::query_as::<_, Line>(
-        "SELECT id, name, path, prefix, interval_check, interval_alert, archived_path, active, created_at 
+        "SELECT id, name, path, prefix, interval_check, interval_alert, archived_path, active, 
+                site, unite, flag_dec, code_ligne, log_path, file_format, created_at 
          FROM lines ORDER BY created_at DESC"
     )
     .fetch_all(&state.pool)
@@ -61,7 +89,8 @@ pub async fn save_line(state: State<'_, DbState>, line: Line) -> Result<i64, Str
         sqlx::query(
             "UPDATE lines SET 
                 name = ?, path = ?, prefix = ?, interval_check = ?, 
-                interval_alert = ?, archived_path = ?, active = ? 
+                interval_alert = ?, archived_path = ?, active = ?,
+                site = ?, unite = ?, flag_dec = ?, code_ligne = ?, log_path = ?, file_format = ?
             WHERE id = ?"
         )
         .bind(&line.name)
@@ -71,6 +100,12 @@ pub async fn save_line(state: State<'_, DbState>, line: Line) -> Result<i64, Str
         .bind(line.interval_alert)
         .bind(&line.archived_path)
         .bind(line.active)
+        .bind(&line.site)
+        .bind(&line.unite)
+        .bind(&line.flag_dec)
+        .bind(&line.code_ligne)
+        .bind(&line.log_path)
+        .bind(&line.file_format)
         .bind(id)
         .execute(&state.pool)
         .await
@@ -80,8 +115,9 @@ pub async fn save_line(state: State<'_, DbState>, line: Line) -> Result<i64, Str
     } else {
         // Insert
         let id = sqlx::query(
-            "INSERT INTO lines (name, path, prefix, interval_check, interval_alert, archived_path, active) 
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO lines (name, path, prefix, interval_check, interval_alert, archived_path, active, 
+                               site, unite, flag_dec, code_ligne, log_path, file_format) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(&line.name)
         .bind(&line.path)
@@ -90,6 +126,12 @@ pub async fn save_line(state: State<'_, DbState>, line: Line) -> Result<i64, Str
         .bind(line.interval_alert)
         .bind(&line.archived_path)
         .bind(line.active)
+        .bind(&line.site)
+        .bind(&line.unite)
+        .bind(&line.flag_dec)
+        .bind(&line.code_ligne)
+        .bind(&line.log_path)
+        .bind(&line.file_format)
         .execute(&state.pool)
         .await
         .map_err(|e| e.to_string())?
@@ -159,7 +201,9 @@ pub async fn stop_line_watcher(app_handle: AppHandle, id: i64) -> Result<(), Str
 #[tauri::command]
 pub async fn get_dashboard_snapshot(state: State<'_, DbState>) -> Result<Vec<DashboardLine>, String> {
     let lines = sqlx::query_as::<_, Line>(
-        "SELECT id, name, path, prefix, interval_check, interval_alert, archived_path, active, created_at FROM lines ORDER BY created_at DESC"
+        "SELECT id, name, path, prefix, interval_check, interval_alert, archived_path, active, 
+                site, unite, flag_dec, code_ligne, log_path, file_format, created_at 
+         FROM lines ORDER BY created_at DESC"
     )
     .fetch_all(&state.pool)
     .await
@@ -319,4 +363,138 @@ pub async fn get_production_data(state: State<'_, DbState>, line_id: i64) -> Res
         }));
     }
     Ok(result)
+}
+
+// ============ SQL Server Config Commands ============
+
+#[tauri::command]
+pub async fn get_sql_server_config(state: State<'_, DbState>) -> Result<SqlServerConfig, String> {
+    let config = sqlx::query_as::<_, SqlServerConfig>(
+        "SELECT id, server, database, username, password, enabled FROM sql_server_config WHERE id = 1"
+    )
+    .fetch_one(&state.pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(config)
+}
+
+#[tauri::command]
+pub async fn save_sql_server_config(
+    state: State<'_, DbState>,
+    server: String,
+    database: String,
+    username: String,
+    password: String,
+    enabled: bool,
+) -> Result<(), String> {
+    sqlx::query(
+        "UPDATE sql_server_config SET server = ?, database = ?, username = ?, password = ?, enabled = ? WHERE id = 1"
+    )
+    .bind(&server)
+    .bind(&database)
+    .bind(&username)
+    .bind(&password)
+    .bind(enabled)
+    .execute(&state.pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+// ============ Logs Commands ============
+
+#[tauri::command]
+pub async fn get_logs(
+    state: State<'_, DbState>,
+    line_id: Option<i64>,
+    level: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<LogEntry>, String> {
+    let limit_val = limit.unwrap_or(200);
+    
+    let logs = if let Some(lid) = line_id {
+        if let Some(lvl) = level {
+            sqlx::query_as::<_, LogEntry>(
+                "SELECT id, line_id, level, source, message, details, created_at 
+                 FROM logs WHERE line_id = ? AND level = ? ORDER BY created_at DESC LIMIT ?"
+            )
+            .bind(lid)
+            .bind(&lvl)
+            .bind(limit_val)
+            .fetch_all(&state.pool)
+            .await
+        } else {
+            sqlx::query_as::<_, LogEntry>(
+                "SELECT id, line_id, level, source, message, details, created_at 
+                 FROM logs WHERE line_id = ? ORDER BY created_at DESC LIMIT ?"
+            )
+            .bind(lid)
+            .bind(limit_val)
+            .fetch_all(&state.pool)
+            .await
+        }
+    } else if let Some(lvl) = level {
+        sqlx::query_as::<_, LogEntry>(
+            "SELECT id, line_id, level, source, message, details, created_at 
+             FROM logs WHERE level = ? ORDER BY created_at DESC LIMIT ?"
+        )
+        .bind(&lvl)
+        .bind(limit_val)
+        .fetch_all(&state.pool)
+        .await
+    } else {
+        sqlx::query_as::<_, LogEntry>(
+            "SELECT id, line_id, level, source, message, details, created_at 
+             FROM logs ORDER BY created_at DESC LIMIT ?"
+        )
+        .bind(limit_val)
+        .fetch_all(&state.pool)
+        .await
+    };
+
+    logs.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn add_log(
+    state: State<'_, DbState>,
+    line_id: Option<i64>,
+    level: String,
+    source: Option<String>,
+    message: String,
+    details: Option<String>,
+) -> Result<i64, String> {
+    let id = sqlx::query(
+        "INSERT INTO logs (line_id, level, source, message, details) VALUES (?, ?, ?, ?, ?)"
+    )
+    .bind(line_id)
+    .bind(&level)
+    .bind(&source)
+    .bind(&message)
+    .bind(&details)
+    .execute(&state.pool)
+    .await
+    .map_err(|e| e.to_string())?
+    .last_insert_rowid();
+
+    Ok(id)
+}
+
+#[tauri::command]
+pub async fn clear_logs(state: State<'_, DbState>, line_id: Option<i64>) -> Result<(), String> {
+    if let Some(lid) = line_id {
+        sqlx::query("DELETE FROM logs WHERE line_id = ?")
+            .bind(lid)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| e.to_string())?;
+    } else {
+        sqlx::query("DELETE FROM logs")
+            .execute(&state.pool)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }

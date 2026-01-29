@@ -1,24 +1,24 @@
 "use client";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronLeft, faMinus, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faChevronLeft, faMinus, faXmark, faSun, faMoon } from "@fortawesome/free-solid-svg-icons";
 import { faSquare as faSquareRegular } from "@fortawesome/free-regular-svg-icons";
-import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 import type { CSSProperties } from "react";
 import { useState } from "react";
 import { useSidebar } from "@/shared/contexts/sidebar";
+import { useTheme } from "@/shared/contexts/theme";
+import { VisorLogo } from "@/shared/ui/VisorLogo";
 import {
   closeWindow,
   minimizeWindow,
   toggleMaximizeWindow,
 } from "@/shared/tauri/window";
 
-const barColor = "var(--dark-bg-sidebar)";
-
 export function Titlebar() {
-  const [hovered, setHovered] = useState<"min" | "max" | "close" | null>(null);
+  const [hovered, setHovered] = useState<"theme" | "min" | "max" | "close" | null>(null);
   const { isExpanded, toggle } = useSidebar();
+  const { theme, toggleTheme } = useTheme();
   const prefersReducedMotion = useReducedMotion();
 
   const handleMinimize = async () => {
@@ -37,13 +37,13 @@ export function Titlebar() {
     <div
       data-tauri-drag-region
       style={{
-        background: barColor,
+        background: "var(--bg-secondary)",
         height: 32,
         display: "flex",
         alignItems: "center",
         userSelect: "none",
         WebkitUserSelect: "none",
-        borderBottom: "1px solid var(--dark-divider)",
+        borderBottom: "1px solid var(--border-default)",
       }}
     >
       <div
@@ -54,7 +54,7 @@ export function Titlebar() {
           alignItems: "center",
           gap: 10,
           paddingLeft: 12,
-          color: "var(--dark-text-secondary)",
+          color: "var(--text-secondary)",
           fontSize: 12,
         }}
       >
@@ -73,7 +73,7 @@ export function Titlebar() {
             placeItems: "center",
             width: 28,
             height: 28,
-            color: "var(--dark-text-secondary)",
+            color: "var(--text-secondary)",
             cursor: "pointer",
           }}
         >
@@ -86,17 +86,30 @@ export function Titlebar() {
           </motion.span>
         </motion.button>
 
-        <Image
-          src="/visor-logo-white.svg"
-          alt="Visor"
-          width={16}
-          height={16}
-          style={{ display: "block", borderRadius: 4 }}
+        <VisorLogo
+          variant={theme === "light" ? "color" : "white"}
+          size={16}
+          className="rounded"
         />
         <span style={{ fontWeight: 500 }}>Visor</span>
       </div>
 
-      <div style={{ display: "flex" }}>
+      <div style={{ display: "flex", alignItems: "center" }}>
+        {/* Theme Toggle */}
+        <button
+          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          onClick={toggleTheme}
+          data-tauri-drag-region="false"
+          style={{
+            ...winButtonStyle,
+            background: hovered === "theme" ? "var(--bg-hover)" : "transparent",
+          }}
+          onMouseEnter={() => setHovered("theme")}
+          onMouseLeave={() => setHovered(null)}
+        >
+          <FontAwesomeIcon icon={theme === "dark" ? faSun : faMoon} className="h-3 w-3" />
+        </button>
+        
         <button
           aria-label="Minimize"
           onClick={handleMinimize}
@@ -149,10 +162,10 @@ const winButtonStyle: CSSProperties = {
   placeItems: "center",
   background: "transparent",
   border: "none",
-  color: "var(--dark-text-secondary)",
+  color: "var(--text-secondary)",
   cursor: "pointer",
 };
 
 const closeButtonStyle: CSSProperties = {
-  color: "var(--dark-text-secondary)",
+  color: "var(--text-secondary)",
 };

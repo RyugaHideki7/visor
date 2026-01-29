@@ -1,55 +1,123 @@
 @import "tailwindcss";
 
+/* ===== NOTION-INSPIRED COLOR PALETTE ===== */
+
+/* Dark Mode (default) */
 :root {
-  /* Core UI - Dark Mode */
-  --dark-bg-canvas: #191919; /* main page/workspace background */
-  --dark-bg-sidebar: #202020; /* sidebar / nav + titlebar */
-  --dark-bg-widget: #191919; /* embeds/cards */
-  --dark-bg-hover: #2c2c2c; /* hover states */
-  --dark-bg-selected: #2c2c2c; /* active/selected */
-  --dark-divider: #252525; /* borders/dividers */
+  /* Backgrounds - Notion dark warm grays */
+  --bg-primary: #191919;
+  --bg-secondary: #202020;
+  --bg-tertiary: #252525;
+  --bg-hover: #2f2f2f;
+  --bg-active: #373737;
+  
+  /* Text */
+  --text-primary: #ebebeb;
+  --text-secondary: #9b9b9b;
+  --text-tertiary: #6b6b6b;
+  --text-placeholder: #505050;
+  
+  /* Borders */
+  --border-default: #2e2e2e;
+  --border-strong: #404040;
+  
+  /* Accent - Notion uses warm tones, not blue */
+  --accent-primary: #eb5757; /* Notion red/coral */
+  --accent-secondary: #f2994a; /* Notion orange */
+  --accent-tertiary: #f2c94c; /* Notion yellow */
+  
+  /* Semantic colors */
+  --color-success: #6fcf97;
+  --color-success-bg: rgba(111, 207, 151, 0.15);
+  --color-warning: #f2c94c;
+  --color-warning-bg: rgba(242, 201, 76, 0.15);
+  --color-error: #eb5757;
+  --color-error-bg: rgba(235, 87, 87, 0.15);
+  --color-info: #56ccf2;
+  --color-info-bg: rgba(86, 204, 242, 0.15);
+  
+  /* Status colors (for production lines) */
+  --status-running: #6fcf97;
+  --status-running-bg: rgba(111, 207, 151, 0.15);
+  --status-alert: #f2994a;
+  --status-alert-bg: rgba(242, 153, 74, 0.15);
+  --status-stopped: #6b6b6b;
+  --status-stopped-bg: rgba(107, 107, 107, 0.15);
+  --status-error: #eb5757;
+  --status-error-bg: rgba(235, 87, 87, 0.15);
+  
+  /* Interactive */
+  --button-primary-bg: #eb5757;
+  --button-primary-hover: #d94848;
+  --button-secondary-bg: #373737;
+  --button-secondary-hover: #454545;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
 
-  --dark-text-primary: #ffffff;
-  --dark-text-secondary: #ededed;
-  --dark-text-muted: #9b9b9b;
-  --dark-text-placeholder: #757575;
-
-  --gray-text: #9b9b9b;
-  --gray-bg: #252525;
-  --brown-text: #a27763;
-  --brown-bg: #2e2724;
-  --orange-text: #cb7b37;
-  --orange-bg: #36291f;
-  --yellow-text: #c19138;
-  --yellow-bg: #372e20;
-  --green-text: #4f9768;
-  --green-bg: #242b26;
-  --blue-text: #447acb;
-  --blue-bg: #1f282d;
-  --purple-text: #865dbb;
-  --purple-bg: #2a2430;
-  --pink-text: #e55c9a;
-  --pink-bg: #33202a;
-  --red-text: #d93f3f;
-  --red-bg: #3a1f1f;
-
-  --dark-border: #333333;
-  --dark-shadow: rgba(0, 0, 0, 0.6);
-
-  /* Map to app tokens */
-  --color-base: var(--dark-bg-canvas);
-  --color-surface: var(--dark-bg-widget);
-  --color-slate: var(--blue-bg);
-  --color-accent: var(--blue-text);
-  --color-navy: var(--dark-bg-sidebar);
-  --color-amber: var(--yellow-text);
-  --color-text: var(--dark-text-primary);
-  --color-muted: var(--dark-text-muted);
+/* Light Mode */
+:root.light {
+  /* Backgrounds */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f7f6f3;
+  --bg-tertiary: #efeee9;
+  --bg-hover: #e8e7e4;
+  --bg-active: #ddddda;
+  
+  /* Text */
+  --text-primary: #37352f;
+  --text-secondary: #6b6b6b;
+  --text-tertiary: #9b9b9b;
+  --text-placeholder: #b4b4b4;
+  
+  /* Borders */
+  --border-default: #e3e2de;
+  --border-strong: #d4d4d0;
+  
+  /* Accent */
+  --accent-primary: #eb5757;
+  --accent-secondary: #f2994a;
+  --accent-tertiary: #f2c94c;
+  
+  /* Semantic colors */
+  --color-success: #0f7b6c;
+  --color-success-bg: rgba(15, 123, 108, 0.1);
+  --color-warning: #cf9f00;
+  --color-warning-bg: rgba(207, 159, 0, 0.1);
+  --color-error: #e03e3e;
+  --color-error-bg: rgba(224, 62, 62, 0.1);
+  --color-info: #0b76b7;
+  --color-info-bg: rgba(11, 118, 183, 0.1);
+  
+  /* Status colors */
+  --status-running: #0f7b6c;
+  --status-running-bg: rgba(15, 123, 108, 0.1);
+  --status-alert: #cf9f00;
+  --status-alert-bg: rgba(207, 159, 0, 0.1);
+  --status-stopped: #9b9b9b;
+  --status-stopped-bg: rgba(155, 155, 155, 0.1);
+  --status-error: #e03e3e;
+  --status-error-bg: rgba(224, 62, 62, 0.1);
+  
+  /* Interactive */
+  --button-primary-bg: #eb5757;
+  --button-primary-hover: #d94848;
+  --button-secondary-bg: #e8e7e4;
+  --button-secondary-hover: #ddddda;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.16);
 }
 
 body {
-  background: var(--color-base);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
   overflow: hidden;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }

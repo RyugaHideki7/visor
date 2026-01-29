@@ -15,11 +15,11 @@ interface LineStatus {
     status: "MARCHE" | "ALERTE" | "ARRET" | "ERREUR";
 }
 
-const statusColors = {
-    MARCHE: { bg: "bg-green-500/20", text: "text-green-400", bar: "bg-green-500" },
-    ALERTE: { bg: "bg-yellow-500/20", text: "text-yellow-400", bar: "bg-yellow-500" },
-    ARRET: { bg: "bg-gray-500/20", text: "text-gray-400", bar: "bg-gray-500" },
-    ERREUR: { bg: "bg-red-500/20", text: "text-red-400", bar: "bg-red-500" },
+const statusStyles = {
+    MARCHE: { bg: "var(--status-running-bg)", color: "var(--status-running)", bar: "var(--status-running)" },
+    ALERTE: { bg: "var(--status-alert-bg)", color: "var(--status-alert)", bar: "var(--status-alert)" },
+    ARRET: { bg: "var(--status-stopped-bg)", color: "var(--status-stopped)", bar: "var(--status-stopped)" },
+    ERREUR: { bg: "var(--status-error-bg)", color: "var(--status-error)", bar: "var(--status-error)" },
 };
 
 export default function Dashboard() {
@@ -49,60 +49,83 @@ export default function Dashboard() {
     return (
         <div className="p-8 flex flex-col gap-8">
             <div>
-                <h1 className="text-2xl font-bold text-white">Tableau de bord</h1>
-                <p className="text-gray-400 text-sm">Statut en temps réel des lignes de production</p>
+                <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Tableau de bord</h1>
+                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Statut en temps réel des lignes de production</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {lineStatuses.map((line) => {
-                    const colors = statusColors[line.status] || statusColors.ARRET;
+                    const styles = statusStyles[line.status] || statusStyles.ARRET;
                     return (
-                        <div key={line.id} className="bg-[#202020] rounded-xl border border-[#333] overflow-hidden">
+                        <div 
+                            key={line.id} 
+                            style={{ 
+                                background: "var(--bg-secondary)", 
+                                borderRadius: 12, 
+                                border: "1px solid var(--border-default)",
+                                overflow: "hidden" 
+                            }}
+                        >
                             <div className="flex justify-between items-start p-5">
                                 <div className="flex gap-3 items-center">
-                                    <div className={`p-2 rounded-lg ${colors.bg} ${colors.text}`}>
+                                    <div 
+                                        className="p-2 rounded-lg"
+                                        style={{ background: styles.bg, color: styles.color }}
+                                    >
                                         <FontAwesomeIcon icon={faIndustry} className="h-5 w-5" />
                                     </div>
                                     <div>
-                                        <p className="text-md font-bold text-white">{line.name}</p>
-                                        <p className="text-xs text-gray-500">ID: {line.id}</p>
+                                        <p className="text-md font-bold" style={{ color: "var(--text-primary)" }}>{line.name}</p>
+                                        <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>ID: {line.id}</p>
                                     </div>
                                 </div>
-                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`}>
+                                <span 
+                                    className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                                    style={{ background: styles.bg, color: styles.color }}
+                                >
                                     {line.status}
                                 </span>
                             </div>
                             
-                            <div className="mx-5 h-px bg-[#333]" />
+                            <div className="mx-5 h-px" style={{ background: "var(--border-default)" }} />
                             
                             <div className="p-5 flex flex-col gap-4">
                                 <div className="flex flex-col gap-2">
                                     <div className="flex justify-between items-center text-xs">
-                                        <span className="text-gray-500">Dernière activité</span>
-                                        <span className="text-gray-300">
+                                        <span style={{ color: "var(--text-tertiary)" }}>Dernière activité</span>
+                                        <span style={{ color: "var(--text-secondary)" }}>
                                             {line.last_processed || "Jamais"}
                                         </span>
                                     </div>
-                                    <div className="w-full h-2 bg-[#333] rounded-full overflow-hidden">
+                                    <div 
+                                        className="w-full h-2 rounded-full overflow-hidden"
+                                        style={{ background: "var(--bg-tertiary)" }}
+                                    >
                                         <div 
-                                            className={`h-full ${colors.bar} transition-all duration-300`}
-                                            style={{ width: `${getProgressValue(line.status)}%` }}
+                                            className="h-full transition-all duration-300"
+                                            style={{ width: `${getProgressValue(line.status)}%`, background: styles.bar }}
                                         />
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-black/30 p-3 rounded-lg flex flex-col items-center">
-                                        <p className="text-[10px] text-gray-500 uppercase font-bold">Traités</p>
-                                        <p className="text-lg font-bold text-green-400">{line.total_processed}</p>
+                                    <div 
+                                        className="p-3 rounded-lg flex flex-col items-center"
+                                        style={{ background: "var(--bg-tertiary)" }}
+                                    >
+                                        <p className="text-[10px] uppercase font-bold" style={{ color: "var(--text-tertiary)" }}>Traités</p>
+                                        <p className="text-lg font-bold" style={{ color: "var(--color-success)" }}>{line.total_processed}</p>
                                     </div>
-                                    <div className="bg-black/30 p-3 rounded-lg flex flex-col items-center">
-                                        <p className="text-[10px] text-gray-500 uppercase font-bold">En attente</p>
-                                        <p className="text-lg font-bold text-yellow-400">{line.pending_files}</p>
+                                    <div 
+                                        className="p-3 rounded-lg flex flex-col items-center"
+                                        style={{ background: "var(--bg-tertiary)" }}
+                                    >
+                                        <p className="text-[10px] uppercase font-bold" style={{ color: "var(--text-tertiary)" }}>En attente</p>
+                                        <p className="text-lg font-bold" style={{ color: "var(--color-warning)" }}>{line.pending_files}</p>
                                     </div>
                                 </div>
 
-                                <div className="flex gap-2 items-center text-[10px] text-gray-500">
+                                <div className="flex gap-2 items-center text-[10px]" style={{ color: "var(--text-tertiary)" }}>
                                     <FontAwesomeIcon icon={faClock} />
                                     <span>Actualisé toutes les 5 secondes</span>
                                 </div>
@@ -113,10 +136,10 @@ export default function Dashboard() {
             </div>
 
             {lineStatuses.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-50">
-                    <FontAwesomeIcon icon={faExclamationTriangle} className="h-12 w-12 text-yellow-500" />
-                    <p className="text-lg font-medium text-white">Aucune ligne active trouvée.</p>
-                    <p className="text-sm text-gray-400">Configurez vos lignes de production dans la section dédiée.</p>
+                <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-60">
+                    <FontAwesomeIcon icon={faExclamationTriangle} className="h-12 w-12" style={{ color: "var(--color-warning)" }} />
+                    <p className="text-lg font-medium" style={{ color: "var(--text-primary)" }}>Aucune ligne active trouvée.</p>
+                    <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Configurez vos lignes de production dans la section dédiée.</p>
                 </div>
             )}
         </div>

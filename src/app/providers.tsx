@@ -13,6 +13,7 @@ import { faGithub, faTwitter } from "@fortawesome/free-brands-svg-icons";
 import "@fortawesome/fontawesome-svg-core/styles.css";
 import type { PropsWithChildren } from "react";
 import { SidebarProvider } from "@/shared/contexts/sidebar";
+import { ThemeProvider } from "@/shared/contexts/theme";
 import { Sidebar } from "@/shared/ui/Sidebar";
 import { Titlebar } from "@/shared/ui/Titlebar";
 
@@ -29,16 +30,18 @@ library.add(
 
 export function Providers({ children }: PropsWithChildren) {
   return (
-    <HeroUIProvider className="dark">
-      <SidebarProvider>
-        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-          <Titlebar />
-          <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
-            <Sidebar />
-            <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
+    <ThemeProvider>
+      <HeroUIProvider>
+        <SidebarProvider>
+          <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+            <Titlebar />
+            <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
+              <Sidebar />
+              <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg-primary)" }}>{children}</div>
+            </div>
           </div>
-        </div>
-      </SidebarProvider>
-    </HeroUIProvider>
+        </SidebarProvider>
+      </HeroUIProvider>
+    </ThemeProvider>
   );
 }

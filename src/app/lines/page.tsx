@@ -60,70 +60,92 @@ export default function LinesPage() {
     return (
         <div className="p-8 flex flex-col gap-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-white">Lignes de production</h1>
+                <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Lignes de production</h1>
                 <button
                     onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors cursor-pointer"
+                    style={{ background: "var(--button-primary-bg)", color: "white" }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "var(--button-primary-hover)"}
+                    onMouseLeave={(e) => e.currentTarget.style.background = "var(--button-primary-bg)"}
                 >
                     <FontAwesomeIcon icon={faPlus} />
                     Ajouter une ligne
                 </button>
             </div>
 
-            <div className="bg-[#202020] rounded-lg border border-[#333] overflow-hidden">
+            <div style={{ background: "var(--bg-secondary)", borderRadius: 8, border: "1px solid var(--border-default)", overflow: "hidden" }}>
                 <table className="w-full">
                     <thead>
-                        <tr className="border-b border-[#333] text-left text-sm text-gray-400">
-                            <th className="px-4 py-3 font-medium">NOM</th>
-                            <th className="px-4 py-3 font-medium">CHEMIN</th>
-                            <th className="px-4 py-3 font-medium">PRÉFIXE</th>
-                            <th className="px-4 py-3 font-medium">STATUT</th>
-                            <th className="px-4 py-3 font-medium">ACTIONS</th>
+                        <tr style={{ borderBottom: "1px solid var(--border-default)", textAlign: "left", fontSize: 14, color: "var(--text-tertiary)" }}>
+                            <th style={{ padding: "12px 16px", fontWeight: 500 }}>NOM</th>
+                            <th style={{ padding: "12px 16px", fontWeight: 500 }}>CHEMIN</th>
+                            <th style={{ padding: "12px 16px", fontWeight: 500 }}>PRÉFIXE</th>
+                            <th style={{ padding: "12px 16px", fontWeight: 500 }}>STATUT</th>
+                            <th style={{ padding: "12px 16px", fontWeight: 500 }}>ACTIONS</th>
                         </tr>
                     </thead>
                     <tbody>
                         {lines.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                                <td colSpan={5} style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-tertiary)" }}>
                                     Aucune ligne configurée.
                                 </td>
                             </tr>
                         ) : (
                             lines.map((line) => (
-                                <tr key={line.id} className="border-b border-[#333] last:border-b-0 hover:bg-[#252525]">
-                                    <td className="px-4 py-3 font-medium text-white">{line.name}</td>
-                                    <td className="px-4 py-3 text-xs text-gray-400">{line.path}</td>
-                                    <td className="px-4 py-3 text-gray-300">{line.prefix}</td>
-                                    <td className="px-4 py-3">
-                                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                            line.active 
-                                                ? "bg-green-500/20 text-green-400" 
-                                                : "bg-gray-500/20 text-gray-400"
-                                        }`}>
+                                <tr 
+                                    key={line.id} 
+                                    style={{ borderBottom: "1px solid var(--border-default)" }}
+                                    onMouseEnter={(e) => e.currentTarget.style.background = "var(--bg-hover)"}
+                                    onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                                >
+                                    <td style={{ padding: "12px 16px", fontWeight: 500, color: "var(--text-primary)" }}>{line.name}</td>
+                                    <td style={{ padding: "12px 16px", fontSize: 12, color: "var(--text-tertiary)" }}>{line.path}</td>
+                                    <td style={{ padding: "12px 16px", color: "var(--text-secondary)" }}>{line.prefix}</td>
+                                    <td style={{ padding: "12px 16px" }}>
+                                        <span 
+                                            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                                            style={{
+                                                background: line.active ? "var(--status-running-bg)" : "var(--status-stopped-bg)",
+                                                color: line.active ? "var(--status-running)" : "var(--status-stopped)"
+                                            }}
+                                        >
                                             {line.active ? "Active" : "Inactif"}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3">
+                                    <td style={{ padding: "12px 16px" }}>
                                         <div className="flex gap-2">
                                             <button
                                                 onClick={() => handleToggleActive(line)}
-                                                className="p-2 rounded-lg hover:bg-[#333] transition-colors cursor-pointer"
+                                                className="p-2 rounded-lg transition-colors cursor-pointer"
+                                                style={{ color: "var(--text-tertiary)" }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.background = "var(--bg-active)";
+                                                    e.currentTarget.style.color = "var(--text-primary)";
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.background = "transparent";
+                                                    e.currentTarget.style.color = "var(--text-tertiary)";
+                                                }}
                                                 title={line.active ? "Mettre en pause" : "Démarrer"}
                                             >
-                                                <FontAwesomeIcon 
-                                                    icon={line.active ? faPause : faPlay} 
-                                                    className="text-gray-400 hover:text-white"
-                                                />
+                                                <FontAwesomeIcon icon={line.active ? faPause : faPlay} />
                                             </button>
                                             <button
                                                 onClick={() => line.id && handleDelete(line.id)}
-                                                className="p-2 rounded-lg hover:bg-red-500/20 transition-colors cursor-pointer"
+                                                className="p-2 rounded-lg transition-colors cursor-pointer"
+                                                style={{ color: "var(--text-tertiary)" }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.background = "var(--color-error-bg)";
+                                                    e.currentTarget.style.color = "var(--color-error)";
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.background = "transparent";
+                                                    e.currentTarget.style.color = "var(--text-tertiary)";
+                                                }}
                                                 title="Supprimer"
                                             >
-                                                <FontAwesomeIcon 
-                                                    icon={faTrash} 
-                                                    className="text-gray-400 hover:text-red-400"
-                                                />
+                                                <FontAwesomeIcon icon={faTrash} />
                                             </button>
                                         </div>
                                     </td>

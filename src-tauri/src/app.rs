@@ -75,7 +75,12 @@ pub fn run_app() {
         crate::commands::get_dashboard_snapshot,
         crate::commands::get_mappings,
         crate::commands::save_mappings,
-        crate::commands::get_production_data
+        crate::commands::get_production_data,
+        crate::commands::get_sql_server_config,
+        crate::commands::save_sql_server_config,
+        crate::commands::get_logs,
+        crate::commands::add_log,
+        crate::commands::clear_logs
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
