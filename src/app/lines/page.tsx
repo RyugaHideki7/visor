@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus, faTrash, faPlay, faPause } from "@fortawesome/free-solid-svg-icons";
 import { AddLineModal, type LineFormData } from "@/shared/ui/AddLineModal";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { 
   Table, 
   TableHeader, 
@@ -31,6 +32,8 @@ interface Line {
 export default function LinesPage() {
     const [lines, setLines] = useState<Line[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<Line | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const fetchLines = async () => {
         try {
@@ -46,16 +49,35 @@ export default function LinesPage() {
     }, []);
 
     const handleSave = async (line: LineFormData) => {
-        await invoke("save_line", { line });
+        const isNewLine = !line.id;
+        const lineId = await invoke<number>("save_line", { line });
+        
+        // Create default mappings for new lines based on file format
+        if (isNewLine && lineId) {
+            try {
+                await invoke("create_default_mappings_for_line", { 
+                    lineId, 
+                    formatName: line.file_format || "ATEIS" 
+                });
+            } catch (error) {
+                console.error("Failed to create default mappings:", error);
+            }
+        }
+        
         fetchLines();
     };
 
-    const handleDelete = async (id: number) => {
+    const handleDeleteConfirmed = async () => {
+        if (!deleteTarget?.id) return;
+        setIsDeleting(true);
         try {
-            await invoke("delete_line", { id });
+            await invoke("delete_line", { id: deleteTarget.id });
+            setDeleteTarget(null);
             fetchLines();
         } catch (error) {
             console.error("Failed to delete line:", error);
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -137,7 +159,7 @@ export default function LinesPage() {
                                             isIconOnly
                                             size="sm"
                                             variant="light"
-                                            onPress={() => line.id && handleDelete(line.id)}
+                                            onPress={() => setDeleteTarget(line)}
                                             className="text-[var(--text-tertiary)] hover:bg-[var(--color-error-bg)] hover:text-[var(--color-error)]"
                                         >
                                             <FontAwesomeIcon icon={faTrash} />
@@ -154,6 +176,22 @@ export default function LinesPage() {
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onSave={handleSave}
+            />
+
+            <ConfirmDialog
+                isOpen={deleteTarget !== null}
+                title="Supprimer la ligne"
+                message={
+                    deleteTarget
+                        ? `Voulez-vous vraiment supprimer la ligne "${deleteTarget.name}" ? Cette action est irréversible.`
+                        : "Voulez-vous vraiment supprimer cette ligne ?"
+                }
+                confirmText="Supprimer"
+                cancelText="Annuler"
+                isDanger
+                isLoading={isDeleting}
+                onCancel={() => (isDeleting ? null : setDeleteTarget(null))}
+                onConfirm={handleDeleteConfirmed}
             />
         </div>
     );

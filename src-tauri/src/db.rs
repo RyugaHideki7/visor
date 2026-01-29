@@ -55,6 +55,10 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
     let _ = sqlx::query("ALTER TABLE lines ADD COLUMN code_ligne TEXT").execute(&pool).await;
     let _ = sqlx::query("ALTER TABLE lines ADD COLUMN log_path TEXT").execute(&pool).await;
     let _ = sqlx::query("ALTER TABLE lines ADD COLUMN file_format TEXT DEFAULT 'ATEIS'").execute(&pool).await;
+    let _ = sqlx::query("ALTER TABLE lines ADD COLUMN total_traites INTEGER DEFAULT 0").execute(&pool).await;
+    let _ = sqlx::query("ALTER TABLE lines ADD COLUMN total_erreurs INTEGER DEFAULT 0").execute(&pool).await;
+    let _ = sqlx::query("ALTER TABLE lines ADD COLUMN last_file_time TEXT").execute(&pool).await;
+    let _ = sqlx::query("ALTER TABLE lines ADD COLUMN etat_actuel TEXT DEFAULT 'ARRET'").execute(&pool).await;
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS mappings (
@@ -133,6 +137,52 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
     )
     .execute(&pool)
     .await?;
+
+    // SQL query templates table
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS sql_queries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            format_name TEXT UNIQUE NOT NULL,
+            query_template TEXT NOT NULL
+        )"
+    )
+    .execute(&pool)
+    .await?;
+
+    // Insert default SQL queries for ATEIS and LOGITRON formats
+    let default_ateis_query = r#"INSERT INTO ITHRITEST.YINTDECL (
+    MFGNUM_0, FCY_0, ITMREF_0, QTY_0, UOM_0, 
+    YSCC_0, YFLGDEC_0, LOT_0, CREDATTIM_0, 
+    CREUSR_0, YDATE_0, YHEURE_0, YNLIGN_0, 
+    YDATDL_0, YCODEPOT_0, YPALETTE_0, YINTERCAL_0
+) VALUES (
+    @P1, @P2, @P3, @P4, @P5, 
+    @P6, @P7, @P8, @P9, 
+    @P10, @P11, @P12, @P13, 
+    @P14, @P15, @P16, @P17
+)"#;
+
+    let default_logitron_query = r#"INSERT INTO ITHRITEST.YINTDECL (
+    MFGNUM_0, FCY_0, ITMREF_0, QTY_0, UOM_0, 
+    YSCC_0, YFLGDEC_0, LOT_0, CREDATTIM_0, 
+    CREUSR_0, YDATE_0, YHEURE_0, YNLIGN_0, 
+    YDATDL_0, YCODEPOT_0, YPALETTE_0, YINTERCAL_0
+) VALUES (
+    @P1, @P2, @P3, @P4, @P5, 
+    @P6, @P7, @P8, @P9, 
+    @P10, @P11, @P12, @P13, 
+    @P14, @P15, @P16, @P17
+)"#;
+
+    sqlx::query("INSERT OR IGNORE INTO sql_queries (format_name, query_template) VALUES ('ATEIS', ?)")
+        .bind(default_ateis_query)
+        .execute(&pool)
+        .await?;
+
+    sqlx::query("INSERT OR IGNORE INTO sql_queries (format_name, query_template) VALUES ('LOGITRON', ?)")
+        .bind(default_logitron_query)
+        .execute(&pool)
+        .await?;
 
     Ok(pool)
 }

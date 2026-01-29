@@ -1,8 +1,9 @@
 use notify::{Config, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
 use std::fs;
+use std::io::Write;
 use std::time::Duration;
-use sqlx::{Pool, Sqlite};
+use sqlx::{Pool, Sqlite, Row};
 use tauri::AppHandle;
 use tauri::Manager;
 use chrono::Local;
@@ -11,6 +12,10 @@ use std::sync::{mpsc, Mutex};
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::FromRow;
+use encoding_rs::{UTF_8, WINDOWS_1252};
+use tiberius::{Client, AuthMethod, Config as SqlConfig, ToSql};
+use tokio_util::compat::TokioAsyncWriteCompatExt;
+use crate::commands::SqlServerConfig;
 
 pub struct WatcherState {
     watchers: Mutex<HashMap<i64, WatcherHandle>>,
@@ -25,6 +30,95 @@ impl WatcherState {
         Self {
             watchers: Mutex::new(HashMap::new()),
         }
+    }
+}
+
+/// Build ordered parameter list following mappings order
+fn build_param_values(mappings: &[MappingRow], mapped: &HashMap<String, String>) -> Vec<String> {
+    mappings
+        .iter()
+        .map(|m| mapped.get(&m.sql_field).cloned().unwrap_or_default())
+        .collect()
+}
+
+impl StockProcessor {
+    async fn execute_sql_server_inserts(
+        &self,
+        line_config: Option<&LineConfig>,
+        mappings: &[MappingRow],
+        rows: &[HashMap<String, String>],
+    ) -> Result<(), String> {
+        let cfg = self
+            .load_sql_server_config()
+            .await
+            .ok_or("SQL Server config introuvable")?;
+
+        if !cfg.enabled {
+            return Ok(()); // SQL disabled; treat as success
+        }
+
+        let format_name = line_config
+            .and_then(|l| l.file_format.clone())
+            .unwrap_or_else(|| "ATEIS".to_string());
+
+        let query = self
+            .load_query_template(&format_name)
+            .await
+            .ok_or("Template SQL manquant")?;
+
+        let mut tiberius_config = SqlConfig::new();
+        tiberius_config.host(cfg.server.as_deref().unwrap_or(""));
+        tiberius_config.port(1433);
+        tiberius_config.authentication(AuthMethod::sql_server(
+            cfg.username.unwrap_or_default(),
+            cfg.password.unwrap_or_default(),
+        ));
+        tiberius_config.trust_cert();
+        if let Some(db) = cfg.database {
+            tiberius_config.database(db);
+        }
+
+        let tcp = tokio::net::TcpStream::connect(tiberius_config.get_addr())
+            .await
+            .map_err(|e| e.to_string())?;
+        tcp.set_nodelay(true).map_err(|e| e.to_string())?;
+        let mut client = Client::connect(tiberius_config, tcp.compat_write())
+            .await
+            .map_err(|e| e.to_string())?;
+
+        for mapped in rows {
+            let params = build_param_values(mappings, mapped);
+            // Keep owned strings alive while passing &dyn ToSql references
+            let owned: Vec<String> = params;
+            let params_refs: Vec<&dyn ToSql> = owned.iter().map(|s| s as &dyn ToSql).collect();
+            client
+                .execute(query.as_str(), &params_refs[..])
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
+    }
+
+    async fn load_sql_server_config(&self) -> Option<SqlServerConfig> {
+        sqlx::query_as::<_, SqlServerConfig>(
+            "SELECT id, server, database, username, password, enabled FROM sql_server_config WHERE id = 1",
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .ok()
+        .flatten()
+    }
+
+    async fn load_query_template(&self, format_name: &str) -> Option<String> {
+        sqlx::query_scalar::<_, String>(
+            "SELECT query_template FROM sql_queries WHERE format_name = ?",
+        )
+        .bind(format_name)
+        .fetch_optional(&self.pool)
+        .await
+        .ok()
+        .flatten()
     }
 }
 
@@ -45,26 +139,229 @@ struct MappingRow {
     pub description: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+struct LineConfig {
+    pub name: String,
+    pub site: Option<String>,
+    pub unite: Option<String>,
+    pub flag_dec: Option<String>,
+    pub code_ligne: Option<String>,
+    pub log_path: Option<String>,
+    pub file_format: Option<String>,
+}
+
+/// Disk logger for per-line log files (matches Python Logger class)
+struct DiskLogger;
+
+impl DiskLogger {
+    fn log_ligne(line_name: &str, log_path: &Option<String>, message: &str, log_type: &str) {
+        let log_dir = match log_path {
+            Some(p) if !p.is_empty() => p,
+            _ => return,
+        };
+
+        if let Err(e) = fs::create_dir_all(log_dir) {
+            eprintln!("Failed to create log dir: {}", e);
+            return;
+        }
+
+        let log_file = format!(
+            "{}/{}_{}.log",
+            log_dir,
+            line_name,
+            Local::now().format("%Y%m")
+        );
+
+        let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
+        let entry = format!("[{}] [{}] {}\n", timestamp, log_type, message);
+
+        if let Ok(mut file) = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_file)
+        {
+            let _ = file.write_all(entry.as_bytes());
+        }
+    }
+
+    fn log_sql(
+        line_name: &str,
+        log_path: &Option<String>,
+        query: &str,
+        values: &str,
+        success: bool,
+        error_msg: &str,
+    ) {
+        let log_dir = match log_path {
+            Some(p) if !p.is_empty() => p,
+            _ => return,
+        };
+
+        if let Err(e) = fs::create_dir_all(log_dir) {
+            eprintln!("Failed to create log dir: {}", e);
+            return;
+        }
+
+        let sql_log_file = format!(
+            "{}/{}_sql_{}.log",
+            log_dir,
+            line_name,
+            Local::now().format("%Y%m")
+        );
+
+        let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
+        let status = if success { "SUCCESS" } else { "ERROR" };
+
+        let mut entry = format!("\n[{}] [{}]\n", timestamp, status);
+        entry.push_str(&format!(
+            "Requête: {}\n",
+            if query.len() > 500 {
+                &query[..500]
+            } else {
+                query
+            }
+        ));
+        entry.push_str(&format!("Valeurs: {}\n", values));
+        if !success && !error_msg.is_empty() {
+            entry.push_str(&format!("Erreur: {}\n", error_msg));
+        }
+        entry.push_str(&"-".repeat(80));
+        entry.push('\n');
+
+        if let Ok(mut file) = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&sql_log_file)
+        {
+            let _ = file.write_all(entry.as_bytes());
+        }
+    }
+}
+
+/// Read file with multiple encoding attempts (like Python's encoding fallback)
+fn read_file_with_encoding_fallback(path: &Path) -> Result<String, String> {
+    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+
+    // Try UTF-8 first
+    if let Ok(s) = std::str::from_utf8(&bytes) {
+        return Ok(s.to_string());
+    }
+
+    // Try UTF-8 with BOM handling
+    let (cow, _, had_errors) = UTF_8.decode(&bytes);
+    if !had_errors {
+        return Ok(cow.into_owned());
+    }
+
+    // Fallback to Windows-1252 (cp1252) which is a superset of ISO-8859-1
+    let (cow, _, _) = WINDOWS_1252.decode(&bytes);
+    Ok(cow.into_owned())
+}
+
 impl StockProcessor {
     pub fn new(pool: Pool<Sqlite>) -> Self {
         Self { pool }
     }
 
+    /// Load line configuration for parameter resolution
+    async fn load_line_config(&self, line_id: i64) -> Option<LineConfig> {
+        let row = sqlx::query(
+            "SELECT name, site, unite, flag_dec, code_ligne, log_path, file_format 
+             FROM lines WHERE id = ?"
+        )
+        .bind(line_id)
+        .fetch_optional(&self.pool)
+        .await
+        .ok()??;
+
+        Some(LineConfig {
+            name: row.get("name"),
+            site: row.get("site"),
+            unite: row.get("unite"),
+            flag_dec: row.get("flag_dec"),
+            code_ligne: row.get("code_ligne"),
+            log_path: row.get("log_path"),
+            file_format: row.get("file_format"),
+        })
+    }
+
+    /// Update line statistics after processing
+    async fn update_line_stats(&self, line_id: i64, success: bool) {
+        let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        
+        if success {
+            let _ = sqlx::query(
+                "UPDATE lines SET total_traites = total_traites + 1, last_file_time = ?, etat_actuel = 'MARCHE' WHERE id = ?"
+            )
+            .bind(&now)
+            .bind(line_id)
+            .execute(&self.pool)
+            .await;
+        } else {
+            let _ = sqlx::query(
+                "UPDATE lines SET total_erreurs = total_erreurs + 1, etat_actuel = 'ERREUR' WHERE id = ?"
+            )
+            .bind(line_id)
+            .execute(&self.pool)
+            .await;
+        }
+    }
+
+    /// Add log entry to database
+    async fn add_db_log(&self, line_id: i64, level: &str, source: &str, message: &str, details: Option<&str>) {
+        let _ = sqlx::query(
+            "INSERT INTO logs (line_id, level, source, message, details) VALUES (?, ?, ?, ?, ?)"
+        )
+        .bind(line_id)
+        .bind(level)
+        .bind(source)
+        .bind(message)
+        .bind(details)
+        .execute(&self.pool)
+        .await;
+    }
+
     pub async fn process_file(&self, line_id: i64, path: PathBuf, prefix: String, archived_path: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
-        let filename = path.file_name().unwrap().to_str().unwrap();
+        let filename = path.file_name().unwrap().to_str().unwrap().to_string();
         
         // Basic check for prefix and extension as in Python code
         if !filename.to_uppercase().contains(&prefix.to_uppercase()) || !filename.to_uppercase().ends_with(".TMP") {
             return Ok(());
         }
 
+        // Load line config for parameters and logging
+        let line_config = self.load_line_config(line_id).await;
+        let line_name = line_config.as_ref().map(|c| c.name.clone()).unwrap_or_else(|| format!("line_{}", line_id));
+        let log_path = line_config.as_ref().and_then(|c| c.log_path.clone());
+
         // Wait a bit to ensure file is completely written (like the Python time.sleep(1))
         tokio::time::sleep(Duration::from_millis(500)).await;
 
-        let content = fs::read_to_string(&path)?;
-        let mut rdr = csv::ReaderBuilder::new().delimiter(b';').from_reader(content.as_bytes());
+        // Check if file is locked
+        if is_file_locked(&path) {
+            DiskLogger::log_ligne(&line_name, &log_path, &format!("Fichier {} en cours d'utilisation", filename), "WARNING");
+            return Ok(());
+        }
 
-        // Load mappings for this line (if none, still count rows).
+        // Read file with encoding fallback
+        let content = match read_file_with_encoding_fallback(&path) {
+            Ok(c) => c,
+            Err(e) => {
+                let msg = format!("Erreur lecture fichier {}: {}", filename, e);
+                DiskLogger::log_ligne(&line_name, &log_path, &msg, "ERROR");
+                self.add_db_log(line_id, "ERROR", "FileProcessor", &msg, None).await;
+                self.update_line_stats(line_id, false).await;
+                return Err(e.into());
+            }
+        };
+
+        let mut rdr = csv::ReaderBuilder::new()
+            .delimiter(b';')
+            .has_headers(false)
+            .flexible(true)
+            .from_reader(content.as_bytes());
+
+        // Load mappings for this line
         let mappings = sqlx::query_as::<_, MappingRow>(
             "SELECT id, line_id, sort_order, sql_field, file_column, parameter, transformation, description \
              FROM mappings WHERE line_id = ? ORDER BY sort_order ASC, id ASC",
@@ -78,6 +375,7 @@ impl StockProcessor {
         let mut first_mapped: Option<serde_json::Value> = None;
         let mut had_error = false;
         let mut error_msg: Option<String> = None;
+        let mut all_mapped_values: Vec<HashMap<String, String>> = Vec::new();
 
         for result in rdr.records() {
             let record = match result {
@@ -95,10 +393,18 @@ impl StockProcessor {
                 continue;
             }
 
-            let mapped = map_record_with_mappings(&record, &mappings);
+            // Map record with line config for parameter resolution
+            let mapped = map_record_with_mappings_and_params(&record, &mappings, &line_config);
             if first_mapped.is_none() {
                 first_mapped = Some(json!(mapped));
             }
+            all_mapped_values.push(mapped);
+        }
+
+        // If no rows or error, mark as error
+        if row_count == 0 {
+            had_error = true;
+            error_msg = Some("Fichier vide ou format invalide".to_string());
         }
 
         let status = if had_error { "ERROR" } else { "SUCCESS" };
@@ -109,38 +415,70 @@ impl StockProcessor {
         })
         .to_string();
 
+        // Insert production data record
         sqlx::query(
             "INSERT INTO production_data (line_id, filename, status, message) 
              VALUES (?, ?, ?, ?)"
         )
         .bind(line_id)
-        .bind(filename)
+        .bind(&filename)
         .bind(status)
-        .bind(message)
+        .bind(&message)
         .execute(&self.pool)
         .await?;
 
-        // Archive only if processing succeeded
-        if status == "SUCCESS" {
-            if let Some(archive_dir) = archived_path {
-            let archive_dir_path = Path::new(&archive_dir);
-            if !archive_dir_path.exists() {
-                fs::create_dir_all(archive_dir_path)?;
+        // Update statistics
+        self.update_line_stats(line_id, !had_error).await;
+
+        // Execute SQL Server inserts if enabled and we have mapped rows
+        if !had_error && !all_mapped_values.is_empty() {
+            if let Err(e) = self.execute_sql_server_inserts(line_config.as_ref(), &mappings, &all_mapped_values).await {
+                let msg = format!("Erreur SQL Server pour {}: {}", filename, e);
+                DiskLogger::log_sql(&line_name, &log_path, "(voir détails)", &serde_json::to_string(&all_mapped_values).unwrap_or_default(), false, &msg);
+                self.add_db_log(line_id, "ERROR", "SQLServer", &msg, None).await;
+                self.update_line_stats(line_id, false).await;
+                had_error = true;
             }
-            
-            let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
-            let new_filename = format!("{}_{}{}", 
-                path.file_stem().unwrap().to_str().unwrap(),
-                timestamp,
-                path.extension().unwrap_or_default().to_str().map(|s| format!(".{}", s)).unwrap_or_default()
-            );
-            
-            let dest_path = archive_dir_path.join(new_filename);
-            fs::rename(&path, dest_path)?;
+        }
+
+        // Log result
+        if had_error {
+            let msg = format!("Échec traitement {}: {}", filename, error_msg.as_deref().unwrap_or("unknown"));
+            DiskLogger::log_ligne(&line_name, &log_path, &msg, "ERROR");
+            self.add_db_log(line_id, "ERROR", "FileProcessor", &msg, None).await;
+        } else {
+            let msg = format!("Fichier {} traité avec succès - {} enregistrements", filename, row_count);
+            DiskLogger::log_ligne(&line_name, &log_path, &msg, "INFO");
+            self.add_db_log(line_id, "SUCCESS", "FileProcessor", &msg, None).await;
+
+            // Archive only if processing succeeded
+            if let Some(archive_dir) = archived_path {
+                let archive_dir_path = Path::new(&archive_dir);
+                if !archive_dir_path.exists() {
+                    fs::create_dir_all(archive_dir_path)?;
+                }
+                
+                let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
+                let new_filename = format!("{}_{}{}", 
+                    path.file_stem().unwrap().to_str().unwrap(),
+                    timestamp,
+                    path.extension().unwrap_or_default().to_str().map(|s| format!(".{}", s)).unwrap_or_default()
+                );
+                
+                let dest_path = archive_dir_path.join(new_filename);
+                fs::rename(&path, dest_path)?;
             }
         }
 
         Ok(())
+    }
+}
+
+/// Check if file is locked (like Python's is_file_locked)
+fn is_file_locked(path: &Path) -> bool {
+    match fs::OpenOptions::new().read(true).write(true).open(path) {
+        Ok(_) => false,
+        Err(_) => true,
     }
 }
 
@@ -262,24 +600,64 @@ fn apply_split(value: &str, part: &str) -> String {
     }
 }
 
-fn map_record_with_mappings(record: &csv::StringRecord, mappings: &[MappingRow]) -> HashMap<String, String> {
+/// Get parameter value from line config
+fn get_parameter_value(param: &str, line_config: &Option<LineConfig>) -> String {
+    let config = match line_config {
+        Some(c) => c,
+        None => return String::new(),
+    };
+
+    match param.to_lowercase().as_str() {
+        "site" | "fcy_0" => config.site.clone().unwrap_or_default(),
+        "unite" | "uom_0" => config.unite.clone().unwrap_or_else(|| "unité".to_string()),
+        "flag_dec" | "yflgdec_0" => config.flag_dec.clone().unwrap_or_else(|| "1".to_string()),
+        "code_ligne" | "ynlign_0" => config.code_ligne.clone().unwrap_or_default(),
+        "creusr_0" | "user" => "VISOR".to_string(),
+        _ => String::new(),
+    }
+}
+
+fn map_record_with_mappings_and_params(
+    record: &csv::StringRecord,
+    mappings: &[MappingRow],
+    line_config: &Option<LineConfig>,
+) -> HashMap<String, String> {
     let mut out = HashMap::new();
 
     for m in mappings {
-        // Parameter mappings will be wired once line parameters exist in DB.
-        let mut value = if let Some(file_col) = &m.file_column {
-            get_file_value(record, file_col)
+        // Determine source: file column or parameter
+        let mut value = if let Some(param) = &m.parameter {
+            if !param.is_empty() {
+                get_parameter_value(param, line_config)
+            } else if let Some(file_col) = &m.file_column {
+                if !file_col.is_empty() {
+                    get_file_value(record, file_col)
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            }
+        } else if let Some(file_col) = &m.file_column {
+            if !file_col.is_empty() {
+                get_file_value(record, file_col)
+            } else {
+                String::new()
+            }
         } else {
-            "".to_string()
+            String::new()
         };
 
+        // Apply transformation
         if let Some(t) = &m.transformation {
-            if t == "split_before_plus" {
-                value = apply_split(&value, "before");
-            } else if t == "split_after_plus" {
-                value = apply_split(&value, "after");
-            } else {
-                value = apply_transformation(value, t);
+            if !t.is_empty() {
+                if t == "split_before_plus" {
+                    value = apply_split(&value, "before");
+                } else if t == "split_after_plus" {
+                    value = apply_split(&value, "after");
+                } else {
+                    value = apply_transformation(value, t);
+                }
             }
         }
 

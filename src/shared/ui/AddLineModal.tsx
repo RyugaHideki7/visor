@@ -346,9 +346,11 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
                   <Select
                     label="Format fichier"
                     labelPlacement="outside"
-                    selectedKeys={[formData.file_format ?? "ATEIS"]}
+                    selectedKeys={new Set([formData.file_format ?? "ATEIS"])}
                     onSelectionChange={(keys) => {
-                      const selected = Array.from(keys)[0] as string;
+                      if (keys === "all") return;
+                      const selected = Array.from(keys)[0] as string | undefined;
+                      if (!selected) return;
                       setFormData({ ...formData, file_format: selected });
                     }}
                     variant="bordered"

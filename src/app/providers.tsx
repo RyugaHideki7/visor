@@ -33,11 +33,16 @@ export function Providers({ children }: PropsWithChildren) {
     <HeroUIProvider>
       <ThemeProvider>
         <SidebarProvider>
-          <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+          <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
             <Titlebar />
             <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
               <Sidebar />
-              <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg-primary)" }}>{children}</div>
+              <div
+                className="app-scroll"
+                style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg-primary)" }}
+              >
+                {children}
+              </div>
             </div>
           </div>
         </SidebarProvider>

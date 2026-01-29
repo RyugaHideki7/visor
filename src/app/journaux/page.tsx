@@ -149,7 +149,7 @@ export default function Journaux() {
             onPress={loadLogs}
             isIconOnly
             variant="bordered"
-            className="border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+            className="border-(--border-default) text-(--text-primary) hover:bg-(--bg-hover)"
           >
             <FontAwesomeIcon icon={faRefresh} className={isLoading ? "animate-spin" : ""} />
           </Button>
@@ -158,7 +158,7 @@ export default function Journaux() {
             isLoading={isLoading}
             variant="bordered"
             startContent={<FontAwesomeIcon icon={faTrash} />}
-            className="border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+            className="border-(--border-default) text-(--text-primary) hover:bg-(--bg-hover)"
           >
             Vider
           </Button>
@@ -167,7 +167,7 @@ export default function Journaux() {
 
       {/* Filters */}
       <div className="flex gap-4 items-center">
-        <FontAwesomeIcon icon={faFilter} style={{ color: "var(--text-tertiary)" }} />
+        
         <Select
           items={lineOptions}
           selectedKeys={new Set([selectedLineId])}
@@ -182,7 +182,7 @@ export default function Journaux() {
           }}
         >
           {(item) => (
-            <SelectItem key={item.key} textValue={item.name} className="text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">
+            <SelectItem key={item.key} textValue={item.name} className="text-(--text-primary) hover:bg-(--bg-hover)">
               {item.name}
             </SelectItem>
           )}
@@ -201,7 +201,7 @@ export default function Journaux() {
           }}
         >
           {(item) => (
-            <SelectItem key={item.key} textValue={item.name} className="text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">
+            <SelectItem key={item.key} textValue={item.name} className="text-(--text-primary) hover:bg-(--bg-hover)">
               {item.name}
             </SelectItem>
           )}
