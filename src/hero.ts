@@ -1,0 +1,100 @@
+import { heroui } from "@heroui/react";
+
+export default heroui({
+  themes: {
+    light: {
+      colors: {
+        background: "#ffffff",
+        foreground: "#37352f",
+        primary: {
+          50: "#fef2f2",
+          100: "#fee2e2",
+          200: "#fecaca",
+          300: "#fca5a5",
+          400: "#f87171",
+          500: "#eb5757",
+          600: "#dc2626",
+          700: "#b91c1c",
+          800: "#991b1b",
+          900: "#7f1d1d",
+          DEFAULT: "#eb5757",
+          foreground: "#ffffff",
+        },
+        secondary: {
+          50: "#f7f6f3",
+          100: "#efeee9",
+          200: "#e8e7e4",
+          300: "#ddddda",
+          400: "#d4d4d0",
+          500: "#c6c5c0",
+          600: "#a8a7a2",
+          700: "#8b8a85",
+          800: "#6d6c68",
+          900: "#52524e",
+          DEFAULT: "#efeee9",
+          foreground: "#37352f",
+        },
+        success: {
+          DEFAULT: "#0f7b6c",
+          foreground: "#ffffff",
+        },
+        warning: {
+          DEFAULT: "#cf9f00",
+          foreground: "#ffffff",
+        },
+        danger: {
+          DEFAULT: "#e03e3e",
+          foreground: "#ffffff",
+        },
+        focus: "#eb5757",
+      },
+    },
+    dark: {
+      colors: {
+        background: "#191919",
+        foreground: "#ebebeb",
+        primary: {
+          50: "#fef2f2",
+          100: "#fee2e2",
+          200: "#fecaca",
+          300: "#fca5a5",
+          400: "#f87171",
+          500: "#eb5757",
+          600: "#dc2626",
+          700: "#b91c1c",
+          800: "#991b1b",
+          900: "#7f1d1d",
+          DEFAULT: "#eb5757",
+          foreground: "#ffffff",
+        },
+        secondary: {
+          50: "#252525",
+          100: "#2f2f2f",
+          200: "#373737",
+          300: "#454545",
+          400: "#525252",
+          500: "#6b6b6b",
+          600: "#9b9b9b",
+          700: "#b4b4b4",
+          800: "#d4d4d0",
+          900: "#e8e7e4",
+          DEFAULT: "#2f2f2f",
+          foreground: "#ebebeb",
+        },
+        success: {
+          DEFAULT: "#6fcf97",
+          foreground: "#ffffff",
+        },
+        warning: {
+          DEFAULT: "#f2c94c",
+          foreground: "#191919",
+        },
+        danger: {
+          DEFAULT: "#eb5757",
+          foreground: "#ffffff",
+        },
+        focus: "#eb5757",
+      },
+    },
+  },
+});

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { 
@@ -12,6 +12,7 @@ import {
   faCircleXmark,
   faCircleCheck
 } from "@fortawesome/free-solid-svg-icons";
+import { Select, SelectItem, Button } from "@heroui/react";
 
 interface LogEntry {
   id: number;
@@ -41,6 +42,29 @@ export default function Journaux() {
   const [selectedLineId, setSelectedLineId] = useState<string>("");
   const [selectedLevel, setSelectedLevel] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
+
+  const lineOptions = useMemo(() => [
+    { key: "", name: "Toutes les lignes" },
+    ...lines.map((l) => ({ key: String(l.id), name: l.name })),
+  ], [lines]);
+
+  const levelOptions = useMemo(() => [
+    { key: "", name: "Tous les niveaux" },
+    { key: "INFO", name: "Info" },
+    { key: "WARNING", name: "Avertissement" },
+    { key: "ERROR", name: "Erreur" },
+    { key: "SUCCESS", name: "Succès" },
+  ], []);
+
+  const handleSelectLine = (keys: any) => {
+    const first = Array.from(keys)[0] as string | undefined;
+    setSelectedLineId(first ?? "");
+  };
+
+  const handleSelectLevel = (keys: any) => {
+    const first = Array.from(keys)[0] as string | undefined;
+    setSelectedLevel(first ?? "");
+  };
 
   useEffect(() => {
     loadLines();
@@ -121,53 +145,67 @@ export default function Journaux() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={loadLogs}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors cursor-pointer"
-            style={{ background: "var(--button-secondary-bg)", color: "var(--text-primary)" }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "var(--button-secondary-hover)"}
-            onMouseLeave={(e) => e.currentTarget.style.background = "var(--button-secondary-bg)"}
+          <Button
+            onPress={loadLogs}
+            isIconOnly
+            variant="bordered"
+            className="border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
           >
             <FontAwesomeIcon icon={faRefresh} className={isLoading ? "animate-spin" : ""} />
-          </button>
-          <button
-            onClick={handleClearLogs}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors cursor-pointer"
-            style={{ color: "var(--color-error)" }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "var(--color-error-bg)"}
-            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+          </Button>
+          <Button
+            onPress={handleClearLogs}
+            isLoading={isLoading}
+            variant="bordered"
+            startContent={<FontAwesomeIcon icon={faTrash} />}
+            className="border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
           >
-            <FontAwesomeIcon icon={faTrash} />
-          </button>
+            Vider
+          </Button>
         </div>
       </div>
 
       {/* Filters */}
       <div className="flex gap-4 items-center">
         <FontAwesomeIcon icon={faFilter} style={{ color: "var(--text-tertiary)" }} />
-        <select
-          value={selectedLineId}
-          onChange={(e) => setSelectedLineId(e.target.value)}
-          className="px-3 py-2 rounded-lg focus:outline-none cursor-pointer"
-          style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
+        <Select
+          items={lineOptions}
+          selectedKeys={new Set([selectedLineId])}
+          onSelectionChange={handleSelectLine}
+          placeholder="Toutes les lignes"
+          variant="bordered"
+          className="min-w-[200px]"
+          classNames={{
+            trigger: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] data-[open=true]:border-[var(--accent-primary)]",
+            value: "text-[var(--text-primary)]",
+            popoverContent: "bg-[var(--bg-secondary)] border border-[var(--border-default)]",
+          }}
         >
-          <option value="">Toutes les lignes</option>
-          {lines.map((l) => (
-            <option key={l.id} value={String(l.id)}>{l.name}</option>
-          ))}
-        </select>
-        <select
-          value={selectedLevel}
-          onChange={(e) => setSelectedLevel(e.target.value)}
-          className="px-3 py-2 rounded-lg focus:outline-none cursor-pointer"
-          style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
+          {(item) => (
+            <SelectItem key={item.key} textValue={item.name} className="text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">
+              {item.name}
+            </SelectItem>
+          )}
+        </Select>
+        <Select
+          items={levelOptions}
+          selectedKeys={new Set([selectedLevel])}
+          onSelectionChange={handleSelectLevel}
+          placeholder="Tous les niveaux"
+          variant="bordered"
+          className="min-w-[180px]"
+          classNames={{
+            trigger: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] data-[open=true]:border-[var(--accent-primary)]",
+            value: "text-[var(--text-primary)]",
+            popoverContent: "bg-[var(--bg-secondary)] border border-[var(--border-default)]",
+          }}
         >
-          <option value="">Tous les niveaux</option>
-          <option value="INFO">Info</option>
-          <option value="WARNING">Avertissement</option>
-          <option value="ERROR">Erreur</option>
-          <option value="SUCCESS">Succès</option>
-        </select>
+          {(item) => (
+            <SelectItem key={item.key} textValue={item.name} className="text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">
+              {item.name}
+            </SelectItem>
+          )}
+        </Select>
         <span className="text-sm" style={{ color: "var(--text-tertiary)" }}>
           {logs.length} entrée{logs.length !== 1 ? "s" : ""}
         </span>

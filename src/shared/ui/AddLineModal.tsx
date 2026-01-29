@@ -2,7 +2,19 @@
 
 import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faFolderOpen, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faFolderOpen } from "@fortawesome/free-solid-svg-icons";
+import { 
+  Modal, 
+  ModalContent, 
+  ModalHeader, 
+  ModalBody, 
+  ModalFooter, 
+  Button, 
+  Input, 
+  Select, 
+  SelectItem,
+  Divider
+} from "@heroui/react";
 
 export interface LineFormData {
   id?: number;
@@ -71,246 +83,252 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div 
-        className="absolute inset-0 backdrop-blur-sm"
-        style={{ background: "rgba(0,0,0,0.5)" }}
-        onClick={handleClose}
-      />
-      
-      {/* Modal */}
-      <div 
-        className="relative w-full max-w-2xl mx-4 rounded-xl"
-        style={{ background: "var(--bg-secondary)", border: "1px solid var(--border-default)", boxShadow: "var(--shadow-lg)" }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border-default)" }}>
-          <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
-            {initialData?.id ? "Modifier la ligne" : "Ajouter une ligne de production"}
-          </h2>
-          <button
-            onClick={handleClose}
-            className="p-2 rounded-lg transition-colors cursor-pointer"
-            style={{ color: "var(--text-tertiary)" }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "var(--bg-hover)"}
-            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-          >
-            <FontAwesomeIcon icon={faXmark} />
-          </button>
-        </div>
+    <Modal 
+      isOpen={isOpen} 
+      onClose={handleClose}
+      size="2xl"
+      backdrop="blur"
+      placement="center"
+      scrollBehavior="inside"
+      classNames={{
+        base: "bg-[var(--bg-secondary)] border border-[var(--border-default)]",
+        header: "border-b border-[var(--border-default)]",
+        footer: "border-t border-[var(--border-default)]",
+        closeButton: "hover:bg-[var(--bg-hover)] active:bg-[var(--bg-active)]",
+      }}
+    >
+      <ModalContent>
+        {() => (
+          <>
+            <ModalHeader className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+                {initialData?.id ? "Modifier la ligne" : "Ajouter une ligne de production"}
+              </h2>
+            </ModalHeader>
+            <ModalBody className="py-6 flex flex-col gap-6">
+              <Input
+                label="Nom de la ligne"
+                labelPlacement="outside"
+                placeholder="ex: Ligne A"
+                value={formData.name}
+                onValueChange={(val) => setFormData({ ...formData, name: val })}
+                variant="bordered"
+                classNames={{
+                  label: "text-[var(--text-secondary)]",
+                  inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                  input: "text-[var(--text-primary)] placeholder:text-[var(--text-placeholder)]",
+                }}
+              />
 
-        {/* Body */}
-        <div className="px-6 py-4 flex flex-col gap-4">
-          <div>
-            <label className="block text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Nom de la ligne</label>
-            <input
-              type="text"
-              placeholder="ex: Ligne A"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg focus:outline-none"
-              style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-              onFocus={(e) => e.currentTarget.style.borderColor = "var(--accent-primary)"}
-              onBlur={(e) => e.currentTarget.style.borderColor = "var(--border-default)"}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Chemin de surveillance</label>
-            <div className="relative">
-              <input
-                type="text"
+              <Input
+                label="Chemin de surveillance"
+                labelPlacement="outside"
                 placeholder="C:/Production/LigneA"
                 value={formData.path}
-                onChange={(e) => setFormData({ ...formData, path: e.target.value })}
-                className="w-full px-3 py-2 pr-10 rounded-lg focus:outline-none"
-                style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-                onFocus={(e) => e.currentTarget.style.borderColor = "var(--accent-primary)"}
-                onBlur={(e) => e.currentTarget.style.borderColor = "var(--border-default)"}
+                onValueChange={(val) => setFormData({ ...formData, path: val })}
+                variant="bordered"
+                endContent={
+                  <Button isIconOnly size="sm" variant="light" className="text-[var(--text-tertiary)]">
+                    <FontAwesomeIcon icon={faFolderOpen} />
+                  </Button>
+                }
+                classNames={{
+                  label: "text-[var(--text-secondary)]",
+                  inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                  input: "text-[var(--text-primary)] placeholder:text-[var(--text-placeholder)]",
+                }}
               />
-              <button 
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded cursor-pointer"
-                style={{ color: "var(--text-tertiary)" }}
+
+              <div className="flex gap-4">
+                <Input
+                  label="Préfixe des fichiers"
+                  labelPlacement="outside"
+                  placeholder="STOCK"
+                  value={formData.prefix}
+                  onValueChange={(val) => setFormData({ ...formData, prefix: val })}
+                  variant="bordered"
+                  className="flex-1"
+                  classNames={{
+                    label: "text-[var(--text-secondary)]",
+                    inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                    input: "text-[var(--text-primary)] placeholder:text-[var(--text-placeholder)]",
+                  }}
+                />
+                <Input
+                  label="Dossier d'archivage"
+                  labelPlacement="outside"
+                  placeholder="C:/Archive/LigneA"
+                  value={formData.archived_path ?? ""}
+                  onValueChange={(val) => setFormData({ ...formData, archived_path: val })}
+                  variant="bordered"
+                  className="flex-1"
+                  classNames={{
+                    label: "text-[var(--text-secondary)]",
+                    inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                    input: "text-[var(--text-primary)] placeholder:text-[var(--text-placeholder)]",
+                  }}
+                />
+              </div>
+
+              <div className="flex gap-4">
+                <Input
+                  type="number"
+                  label="Intervalle marche (min)"
+                  labelPlacement="outside"
+                  value={formData.interval_check.toString()}
+                  onValueChange={(val) => setFormData({ ...formData, interval_check: parseInt(val) || 0 })}
+                  variant="bordered"
+                  className="flex-1"
+                  classNames={{
+                    label: "text-[var(--text-secondary)]",
+                    inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                    input: "text-[var(--text-primary)]",
+                  }}
+                />
+                <Input
+                  type="number"
+                  label="Intervalle arrêt (min)"
+                  labelPlacement="outside"
+                  value={formData.interval_alert.toString()}
+                  onValueChange={(val) => setFormData({ ...formData, interval_alert: parseInt(val) || 0 })}
+                  variant="bordered"
+                  className="flex-1"
+                  classNames={{
+                    label: "text-[var(--text-secondary)]",
+                    inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                    input: "text-[var(--text-primary)]",
+                  }}
+                />
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2">
+                  <Divider className="flex-1" />
+                  <p className="text-xs font-medium uppercase text-[var(--text-tertiary)]">Paramètres SQL</p>
+                  <Divider className="flex-1" />
+                </div>
+
+                <div className="flex gap-4">
+                  <Input
+                    label="Site"
+                    labelPlacement="outside"
+                    placeholder="ex: SITE01"
+                    value={formData.site ?? ""}
+                    onValueChange={(val) => setFormData({ ...formData, site: val })}
+                    variant="bordered"
+                    className="flex-1"
+                    classNames={{
+                      label: "text-[var(--text-secondary)]",
+                      inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                      input: "text-[var(--text-primary)]",
+                    }}
+                  />
+                  <Input
+                    label="Unité"
+                    labelPlacement="outside"
+                    placeholder="ex: UNITE01"
+                    value={formData.unite ?? ""}
+                    onValueChange={(val) => setFormData({ ...formData, unite: val })}
+                    variant="bordered"
+                    className="flex-1"
+                    classNames={{
+                      label: "text-[var(--text-secondary)]",
+                      inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                      input: "text-[var(--text-primary)]",
+                    }}
+                  />
+                </div>
+
+                <div className="flex gap-4">
+                  <Input
+                    label="Flag Déc"
+                    labelPlacement="outside"
+                    placeholder="ex: 1"
+                    value={formData.flag_dec ?? ""}
+                    onValueChange={(val) => setFormData({ ...formData, flag_dec: val })}
+                    variant="bordered"
+                    className="flex-1"
+                    classNames={{
+                      label: "text-[var(--text-secondary)]",
+                      inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                      input: "text-[var(--text-primary)]",
+                    }}
+                  />
+                  <Input
+                    label="Code Ligne"
+                    labelPlacement="outside"
+                    placeholder="ex: L01"
+                    value={formData.code_ligne ?? ""}
+                    onValueChange={(val) => setFormData({ ...formData, code_ligne: val })}
+                    variant="bordered"
+                    className="flex-1"
+                    classNames={{
+                      label: "text-[var(--text-secondary)]",
+                      inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                      input: "text-[var(--text-primary)]",
+                    }}
+                  />
+                </div>
+
+                <div className="flex gap-4">
+                  <Input
+                    label="Dossier logs"
+                    labelPlacement="outside"
+                    placeholder="C:/Logs/LigneA"
+                    value={formData.log_path ?? ""}
+                    onValueChange={(val) => setFormData({ ...formData, log_path: val })}
+                    variant="bordered"
+                    className="flex-1"
+                    classNames={{
+                      label: "text-[var(--text-secondary)]",
+                      inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                      input: "text-[var(--text-primary)]",
+                    }}
+                  />
+                  <Select
+                    label="Format fichier"
+                    labelPlacement="outside"
+                    selectedKeys={[formData.file_format ?? "ATEIS"]}
+                    onSelectionChange={(keys) => {
+                      const selected = Array.from(keys)[0] as string;
+                      setFormData({ ...formData, file_format: selected });
+                    }}
+                    variant="bordered"
+                    className="flex-1"
+                    classNames={{
+                      label: "text-[var(--text-secondary)]",
+                      trigger: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] data-[open=true]:border-[var(--accent-primary)]",
+                      value: "text-[var(--text-primary)]",
+                      popoverContent: "bg-[var(--bg-secondary)] border border-[var(--border-default)]",
+                    }}
+                  >
+                    <SelectItem key="ATEIS" textValue="ATEIS" className="text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">ATEIS</SelectItem>
+                    <SelectItem key="LOGITRON" textValue="LOGITRON" className="text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">LOGITRON</SelectItem>
+                  </Select>
+                </div>
+              </div>
+            </ModalBody>
+            <ModalFooter>
+              <Button 
+                variant="light" 
+                onPress={handleClose}
+                className="text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
               >
-                <FontAwesomeIcon icon={faFolderOpen} />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <label className="block text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Préfixe des fichiers</label>
-              <input
-                type="text"
-                placeholder="STOCK"
-                value={formData.prefix}
-                onChange={(e) => setFormData({ ...formData, prefix: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg focus:outline-none"
-                style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-                onFocus={(e) => e.currentTarget.style.borderColor = "var(--accent-primary)"}
-                onBlur={(e) => e.currentTarget.style.borderColor = "var(--border-default)"}
-              />
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Dossier d'archivage</label>
-              <input
-                type="text"
-                placeholder="C:/Archive/LigneA"
-                value={formData.archived_path ?? ""}
-                onChange={(e) => setFormData({ ...formData, archived_path: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg focus:outline-none"
-                style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-                onFocus={(e) => e.currentTarget.style.borderColor = "var(--accent-primary)"}
-                onBlur={(e) => e.currentTarget.style.borderColor = "var(--border-default)"}
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <label className="block text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Intervalle marche (min)</label>
-              <input
-                type="number"
-                value={formData.interval_check}
-                onChange={(e) => setFormData({ ...formData, interval_check: parseInt(e.target.value) || 0 })}
-                className="w-full px-3 py-2 rounded-lg focus:outline-none"
-                style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-                onFocus={(e) => e.currentTarget.style.borderColor = "var(--accent-primary)"}
-                onBlur={(e) => e.currentTarget.style.borderColor = "var(--border-default)"}
-              />
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Intervalle arrêt (min)</label>
-              <input
-                type="number"
-                value={formData.interval_alert}
-                onChange={(e) => setFormData({ ...formData, interval_alert: parseInt(e.target.value) || 0 })}
-                className="w-full px-3 py-2 rounded-lg focus:outline-none"
-                style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-                onFocus={(e) => e.currentTarget.style.borderColor = "var(--accent-primary)"}
-                onBlur={(e) => e.currentTarget.style.borderColor = "var(--border-default)"}
-              />
-            </div>
-          </div>
-
-          {/* Separator */}
-          <div className="my-2" style={{ borderTop: "1px solid var(--border-default)" }} />
-          <p className="text-xs font-medium uppercase" style={{ color: "var(--text-tertiary)" }}>Paramètres SQL</p>
-
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <label className="block text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Site</label>
-              <input
-                type="text"
-                placeholder="ex: SITE01"
-                value={formData.site ?? ""}
-                onChange={(e) => setFormData({ ...formData, site: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg focus:outline-none"
-                style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-                onFocus={(e) => e.currentTarget.style.borderColor = "var(--accent-primary)"}
-                onBlur={(e) => e.currentTarget.style.borderColor = "var(--border-default)"}
-              />
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Unité</label>
-              <input
-                type="text"
-                placeholder="ex: UNITE01"
-                value={formData.unite ?? ""}
-                onChange={(e) => setFormData({ ...formData, unite: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg focus:outline-none"
-                style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-                onFocus={(e) => e.currentTarget.style.borderColor = "var(--accent-primary)"}
-                onBlur={(e) => e.currentTarget.style.borderColor = "var(--border-default)"}
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <label className="block text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Flag Déc</label>
-              <input
-                type="text"
-                placeholder="ex: 1"
-                value={formData.flag_dec ?? ""}
-                onChange={(e) => setFormData({ ...formData, flag_dec: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg focus:outline-none"
-                style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-                onFocus={(e) => e.currentTarget.style.borderColor = "var(--accent-primary)"}
-                onBlur={(e) => e.currentTarget.style.borderColor = "var(--border-default)"}
-              />
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Code Ligne</label>
-              <input
-                type="text"
-                placeholder="ex: L01"
-                value={formData.code_ligne ?? ""}
-                onChange={(e) => setFormData({ ...formData, code_ligne: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg focus:outline-none"
-                style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-                onFocus={(e) => e.currentTarget.style.borderColor = "var(--accent-primary)"}
-                onBlur={(e) => e.currentTarget.style.borderColor = "var(--border-default)"}
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <label className="block text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Dossier logs</label>
-              <input
-                type="text"
-                placeholder="C:/Logs/LigneA"
-                value={formData.log_path ?? ""}
-                onChange={(e) => setFormData({ ...formData, log_path: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg focus:outline-none"
-                style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-                onFocus={(e) => e.currentTarget.style.borderColor = "var(--accent-primary)"}
-                onBlur={(e) => e.currentTarget.style.borderColor = "var(--border-default)"}
-              />
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Format fichier</label>
-              <select
-                value={formData.file_format ?? "ATEIS"}
-                onChange={(e) => setFormData({ ...formData, file_format: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg focus:outline-none cursor-pointer"
-                style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
+                Annuler
+              </Button>
+              <Button 
+                color="primary" 
+                onPress={handleSave}
+                isLoading={isSaving}
+                className="bg-[var(--button-primary-bg)] text-white hover:bg-[var(--button-primary-hover)]"
               >
-                <option value="ATEIS">ATEIS</option>
-                <option value="LOGITRON">LOGITRON</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-3 px-6 py-4" style={{ borderTop: "1px solid var(--border-default)" }}>
-          <button
-            onClick={handleClose}
-            className="px-4 py-2 rounded-lg transition-colors cursor-pointer"
-            style={{ background: "var(--button-secondary-bg)", color: "var(--text-primary)" }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "var(--button-secondary-hover)"}
-            onMouseLeave={(e) => e.currentTarget.style.background = "var(--button-secondary-bg)"}
-          >
-            Annuler
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="px-4 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
-            style={{ background: "var(--button-primary-bg)", color: "white" }}
-            onMouseEnter={(e) => !isSaving && (e.currentTarget.style.background = "var(--button-primary-hover)")}
-            onMouseLeave={(e) => e.currentTarget.style.background = "var(--button-primary-bg)"}
-          >
-            {isSaving ? "..." : "Sauvegarder"}
-          </button>
-        </div>
-      </div>
-    </div>
+                Sauvegarder
+              </Button>
+            </ModalFooter>
+          </>
+        )}
+      </ModalContent>
+    </Modal>
   );
 }

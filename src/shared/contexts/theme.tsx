@@ -21,16 +21,22 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setMounted(true);
     const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    if (stored === "light" || stored === "dark") {
-      setThemeState(stored);
-      document.documentElement.classList.toggle("light", stored === "light");
-    }
+    const initialTheme: Theme = stored === "light" || stored === "dark" ? stored : "dark";
+    setThemeState(initialTheme);
+    applyThemeClasses(initialTheme);
   }, []);
+
+  const applyThemeClasses = (newTheme: Theme) => {
+    const root = document.documentElement;
+    root.classList.remove("light", "dark");
+    root.classList.add(newTheme);
+    root.classList.add("text-foreground", "bg-background");
+  };
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
     localStorage.setItem(STORAGE_KEY, newTheme);
-    document.documentElement.classList.toggle("light", newTheme === "light");
+    applyThemeClasses(newTheme);
   };
 
   const toggleTheme = () => {

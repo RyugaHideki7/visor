@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus, faTrash } from "@fortawesome/free-solid-svg-icons";
+import { Select, SelectItem, Button, Input } from "@heroui/react";
 
 type Line = {
   id?: number;
@@ -31,6 +32,16 @@ export default function MappingPage() {
     const n = Number(selectedLineId);
     return Number.isFinite(n) ? n : null;
   }, [selectedLineId]);
+
+  const handleSelectLine = (keys: any) => {
+    const first = Array.from(keys)[0] as string | undefined;
+    setSelectedLineId(first ?? "");
+  };
+
+  const lineOptions = useMemo(() => [
+    { key: "", name: "Sélectionner une ligne" },
+    ...lines.map((l) => ({ key: String(l.id), name: l.name })),
+  ], [lines]);
 
   const loadLines = async () => {
     const res = await invoke<any[]>("get_lines");
@@ -109,44 +120,46 @@ export default function MappingPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={handleAddRow}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors cursor-pointer"
-            style={{ background: "var(--button-secondary-bg)", color: "var(--text-primary)" }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "var(--button-secondary-hover)"}
-            onMouseLeave={(e) => e.currentTarget.style.background = "var(--button-secondary-bg)"}
+          <Button
+            onPress={handleAddRow}
+            variant="bordered"
+            startContent={<FontAwesomeIcon icon={faPlus} />}
+            className="border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
           >
-            <FontAwesomeIcon icon={faPlus} />
             Ajouter
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
-            style={{ background: "var(--button-primary-bg)", color: "white" }}
-            onMouseEnter={(e) => !isSaving && (e.currentTarget.style.background = "var(--button-primary-hover)")}
-            onMouseLeave={(e) => e.currentTarget.style.background = "var(--button-primary-bg)"}
+          </Button>
+          <Button
+            onPress={handleSave}
+            isLoading={isSaving}
+            color="primary"
+            className="bg-[var(--button-primary-bg)] text-white hover:bg-[var(--button-primary-hover)]"
           >
-            {isSaving ? "..." : "Sauvegarder"}
-          </button>
+            Sauvegarder
+          </Button>
         </div>
       </div>
 
       <div className="max-w-md">
-        <label className="block text-sm mb-2" style={{ color: "var(--text-secondary)" }}>Ligne</label>
-        <select
-          value={selectedLineId}
-          onChange={(e) => setSelectedLineId(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg focus:outline-none cursor-pointer"
-          style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
+        <Select
+          items={lineOptions}
+          selectedKeys={new Set([selectedLineId])}
+          onSelectionChange={handleSelectLine}
+          placeholder="Sélectionner une ligne"
+          variant="bordered"
+          className="w-full"
+          classNames={{
+            label: "text-[var(--text-secondary)]",
+            trigger: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] data-[open=true]:border-[var(--accent-primary)]",
+            value: "text-[var(--text-primary)]",
+            popoverContent: "bg-[var(--bg-secondary)] border border-[var(--border-default)]",
+          }}
         >
-          <option value="">Sélectionner une ligne</option>
-          {lines.map((l) => (
-            <option key={l.id} value={String(l.id)}>
-              {l.name}
-            </option>
-          ))}
-        </select>
+          {(item) => (
+            <SelectItem key={item.key} textValue={item.name} className="text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">
+              {item.name}
+            </SelectItem>
+          )}
+        </Select>
       </div>
 
       <div style={{ background: "var(--bg-secondary)", borderRadius: 8, border: "1px solid var(--border-default)", overflow: "hidden" }}>
@@ -172,72 +185,86 @@ export default function MappingPage() {
               rows.map((r, idx) => (
                 <tr key={`${r.id ?? "new"}-${idx}`} style={{ borderBottom: "1px solid var(--border-default)" }}>
                   <td style={{ padding: "8px" }}>
-                    <input
+                    <Input
                       type="text"
                       value={r.sql_field}
-                      onChange={(e) => handleUpdateRow(idx, { sql_field: e.target.value })}
-                      className="w-full px-2 py-1 rounded text-sm focus:outline-none"
-                      style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
+                      onValueChange={(val) => handleUpdateRow(idx, { sql_field: val })}
                       placeholder="ex: YSCC_0"
+                      size="sm"
+                      variant="bordered"
+                      classNames={{
+                        inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                        input: "text-[var(--text-primary)] placeholder:text-[var(--text-placeholder)] text-sm",
+                      }}
                     />
                   </td>
                   <td style={{ padding: "8px" }}>
-                    <input
+                    <Input
                       type="text"
                       value={r.file_column ?? ""}
-                      onChange={(e) => handleUpdateRow(idx, { file_column: e.target.value })}
-                      className="w-full px-2 py-1 rounded text-sm focus:outline-none"
-                      style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
+                      onValueChange={(val) => handleUpdateRow(idx, { file_column: val })}
                       placeholder="ex: 0"
+                      size="sm"
+                      variant="bordered"
+                      classNames={{
+                        inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                        input: "text-[var(--text-primary)] placeholder:text-[var(--text-placeholder)] text-sm",
+                      }}
                     />
                   </td>
                   <td style={{ padding: "8px" }}>
-                    <input
+                    <Input
                       type="text"
                       value={r.parameter ?? ""}
-                      onChange={(e) => handleUpdateRow(idx, { parameter: e.target.value })}
-                      className="w-full px-2 py-1 rounded text-sm focus:outline-none"
-                      style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
+                      onValueChange={(val) => handleUpdateRow(idx, { parameter: val })}
                       placeholder="ex: site"
+                      size="sm"
+                      variant="bordered"
+                      classNames={{
+                        inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                        input: "text-[var(--text-primary)] placeholder:text-[var(--text-placeholder)] text-sm",
+                      }}
                     />
                   </td>
                   <td style={{ padding: "8px" }}>
-                    <input
+                    <Input
                       type="text"
                       value={r.transformation ?? ""}
-                      onChange={(e) => handleUpdateRow(idx, { transformation: e.target.value })}
-                      className="w-full px-2 py-1 rounded text-sm focus:outline-none"
-                      style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
+                      onValueChange={(val) => handleUpdateRow(idx, { transformation: val })}
                       placeholder="ex: date"
+                      size="sm"
+                      variant="bordered"
+                      classNames={{
+                        inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                        input: "text-[var(--text-primary)] placeholder:text-[var(--text-placeholder)] text-sm",
+                      }}
                     />
                   </td>
                   <td style={{ padding: "8px" }}>
-                    <input
+                    <Input
                       type="text"
                       value={r.description ?? ""}
-                      onChange={(e) => handleUpdateRow(idx, { description: e.target.value })}
-                      className="w-full px-2 py-1 rounded text-sm focus:outline-none"
-                      style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
+                      onValueChange={(val) => handleUpdateRow(idx, { description: val })}
                       placeholder="Description"
+                      size="sm"
+                      variant="bordered"
+                      classNames={{
+                        inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                        input: "text-[var(--text-primary)] placeholder:text-[var(--text-placeholder)] text-sm",
+                      }}
                     />
                   </td>
                   <td style={{ padding: "8px" }}>
-                    <button
-                      onClick={() => handleDeleteRow(idx)}
-                      className="p-2 rounded-lg transition-colors cursor-pointer"
-                      style={{ color: "var(--text-tertiary)" }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "var(--color-error-bg)";
-                        e.currentTarget.style.color = "var(--color-error)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "transparent";
-                        e.currentTarget.style.color = "var(--text-tertiary)";
-                      }}
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      variant="light"
+                      onPress={() => handleDeleteRow(idx)}
+                      className="text-[var(--text-tertiary)] hover:bg-[var(--color-error-bg)] hover:text-[var(--color-error)]"
                       title="Supprimer"
                     >
                       <FontAwesomeIcon icon={faTrash} />
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))

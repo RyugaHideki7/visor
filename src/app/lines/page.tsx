@@ -5,6 +5,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus, faTrash, faPlay, faPause } from "@fortawesome/free-solid-svg-icons";
 import { AddLineModal, type LineFormData } from "@/shared/ui/AddLineModal";
+import { 
+  Table, 
+  TableHeader, 
+  TableColumn, 
+  TableBody, 
+  TableRow, 
+  TableCell, 
+  Button, 
+  Tooltip,
+  Chip
+} from "@heroui/react";
 
 interface Line {
     id?: number;
@@ -60,101 +71,84 @@ export default function LinesPage() {
     return (
         <div className="p-8 flex flex-col gap-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Lignes de production</h1>
-                <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors cursor-pointer"
-                    style={{ background: "var(--button-primary-bg)", color: "white" }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = "var(--button-primary-hover)"}
-                    onMouseLeave={(e) => e.currentTarget.style.background = "var(--button-primary-bg)"}
+                <div>
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)]">Lignes de production</h1>
+                    <p className="text-sm text-[var(--text-secondary)]">Gérez vos lignes de surveillance et paramètres de traitement</p>
+                </div>
+                <Button
+                    onPress={() => setIsModalOpen(true)}
+                    color="primary"
+                    startContent={<FontAwesomeIcon icon={faPlus} />}
+                    className="bg-[var(--button-primary-bg)] text-white hover:bg-[var(--button-primary-hover)]"
                 >
-                    <FontAwesomeIcon icon={faPlus} />
                     Ajouter une ligne
-                </button>
+                </Button>
             </div>
 
-            <div style={{ background: "var(--bg-secondary)", borderRadius: 8, border: "1px solid var(--border-default)", overflow: "hidden" }}>
-                <table className="w-full">
-                    <thead>
-                        <tr style={{ borderBottom: "1px solid var(--border-default)", textAlign: "left", fontSize: 14, color: "var(--text-tertiary)" }}>
-                            <th style={{ padding: "12px 16px", fontWeight: 500 }}>NOM</th>
-                            <th style={{ padding: "12px 16px", fontWeight: 500 }}>CHEMIN</th>
-                            <th style={{ padding: "12px 16px", fontWeight: 500 }}>PRÉFIXE</th>
-                            <th style={{ padding: "12px 16px", fontWeight: 500 }}>STATUT</th>
-                            <th style={{ padding: "12px 16px", fontWeight: 500 }}>ACTIONS</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {lines.length === 0 ? (
-                            <tr>
-                                <td colSpan={5} style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-tertiary)" }}>
-                                    Aucune ligne configurée.
-                                </td>
-                            </tr>
-                        ) : (
-                            lines.map((line) => (
-                                <tr 
-                                    key={line.id} 
-                                    style={{ borderBottom: "1px solid var(--border-default)" }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = "var(--bg-hover)"}
-                                    onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+            <Table 
+                aria-label="Table des lignes de production"
+                classNames={{
+                    base: "border border-[var(--border-default)] rounded-xl overflow-hidden shadow-sm",
+                    table: "bg-[var(--bg-secondary)]",
+                    thead: "[&>tr]:first:rounded-none bg-[var(--bg-tertiary)]",
+                    th: "bg-[var(--bg-tertiary)] text-[var(--text-tertiary)] font-bold text-xs uppercase py-4 px-6 border-b border-[var(--border-default)]",
+                    td: "py-4 px-6 text-sm text-[var(--text-primary)] border-b border-[var(--border-default)/50]",
+                    tr: "hover:bg-[var(--bg-hover)] transition-colors",
+                }}
+            >
+                <TableHeader>
+                    <TableColumn>NOM</TableColumn>
+                    <TableColumn>CHEMIN</TableColumn>
+                    <TableColumn>PRÉFIXE</TableColumn>
+                    <TableColumn>STATUT</TableColumn>
+                    <TableColumn align="center">ACTIONS</TableColumn>
+                </TableHeader>
+                <TableBody emptyContent={"Aucune ligne configurée."}>
+                    {lines.map((line) => (
+                        <TableRow key={line.id}>
+                            <TableCell className="font-semibold">{line.name}</TableCell>
+                            <TableCell className="text-xs text-[var(--text-tertiary)]">{line.path}</TableCell>
+                            <TableCell className="text-[var(--text-secondary)]">{line.prefix}</TableCell>
+                            <TableCell>
+                                <Chip 
+                                    color={line.active ? "success" : "default"} 
+                                    variant="flat" 
+                                    size="sm"
+                                    className="font-medium"
                                 >
-                                    <td style={{ padding: "12px 16px", fontWeight: 500, color: "var(--text-primary)" }}>{line.name}</td>
-                                    <td style={{ padding: "12px 16px", fontSize: 12, color: "var(--text-tertiary)" }}>{line.path}</td>
-                                    <td style={{ padding: "12px 16px", color: "var(--text-secondary)" }}>{line.prefix}</td>
-                                    <td style={{ padding: "12px 16px" }}>
-                                        <span 
-                                            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
-                                            style={{
-                                                background: line.active ? "var(--status-running-bg)" : "var(--status-stopped-bg)",
-                                                color: line.active ? "var(--status-running)" : "var(--status-stopped)"
-                                            }}
+                                    {line.active ? "Active" : "Inactif"}
+                                </Chip>
+                            </TableCell>
+                            <TableCell>
+                                <div className="flex justify-center gap-2">
+                                    <Tooltip content={line.active ? "Mettre en pause" : "Démarrer"}>
+                                        <Button
+                                            isIconOnly
+                                            size="sm"
+                                            variant="light"
+                                            onPress={() => handleToggleActive(line)}
+                                            className="text-[var(--text-tertiary)] hover:bg-[var(--bg-active)] hover:text-[var(--text-primary)]"
                                         >
-                                            {line.active ? "Active" : "Inactif"}
-                                        </span>
-                                    </td>
-                                    <td style={{ padding: "12px 16px" }}>
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => handleToggleActive(line)}
-                                                className="p-2 rounded-lg transition-colors cursor-pointer"
-                                                style={{ color: "var(--text-tertiary)" }}
-                                                onMouseEnter={(e) => {
-                                                    e.currentTarget.style.background = "var(--bg-active)";
-                                                    e.currentTarget.style.color = "var(--text-primary)";
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.background = "transparent";
-                                                    e.currentTarget.style.color = "var(--text-tertiary)";
-                                                }}
-                                                title={line.active ? "Mettre en pause" : "Démarrer"}
-                                            >
-                                                <FontAwesomeIcon icon={line.active ? faPause : faPlay} />
-                                            </button>
-                                            <button
-                                                onClick={() => line.id && handleDelete(line.id)}
-                                                className="p-2 rounded-lg transition-colors cursor-pointer"
-                                                style={{ color: "var(--text-tertiary)" }}
-                                                onMouseEnter={(e) => {
-                                                    e.currentTarget.style.background = "var(--color-error-bg)";
-                                                    e.currentTarget.style.color = "var(--color-error)";
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.background = "transparent";
-                                                    e.currentTarget.style.color = "var(--text-tertiary)";
-                                                }}
-                                                title="Supprimer"
-                                            >
-                                                <FontAwesomeIcon icon={faTrash} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                                            <FontAwesomeIcon icon={line.active ? faPause : faPlay} />
+                                        </Button>
+                                    </Tooltip>
+                                    <Tooltip content="Supprimer" color="danger">
+                                        <Button
+                                            isIconOnly
+                                            size="sm"
+                                            variant="light"
+                                            onPress={() => line.id && handleDelete(line.id)}
+                                            className="text-[var(--text-tertiary)] hover:bg-[var(--color-error-bg)] hover:text-[var(--color-error)]"
+                                        >
+                                            <FontAwesomeIcon icon={faTrash} />
+                                        </Button>
+                                    </Tooltip>
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
 
             <AddLineModal
                 isOpen={isModalOpen}
