@@ -35,6 +35,7 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
             interval_check INTEGER DEFAULT 60,
             interval_alert INTEGER DEFAULT 120,
             archived_path TEXT,
+            rejected_path TEXT,
             active BOOLEAN DEFAULT 1,
             site TEXT,
             unite TEXT,
@@ -59,6 +60,7 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
     let _ = sqlx::query("ALTER TABLE lines ADD COLUMN total_erreurs INTEGER DEFAULT 0").execute(&pool).await;
     let _ = sqlx::query("ALTER TABLE lines ADD COLUMN last_file_time TEXT").execute(&pool).await;
     let _ = sqlx::query("ALTER TABLE lines ADD COLUMN etat_actuel TEXT DEFAULT 'ARRET'").execute(&pool).await;
+    let _ = sqlx::query("ALTER TABLE lines ADD COLUMN rejected_path TEXT").execute(&pool).await;
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS mappings (

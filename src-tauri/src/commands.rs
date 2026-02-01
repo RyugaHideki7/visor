@@ -16,6 +16,7 @@ pub struct Line {
     pub interval_check: i64,
     pub interval_alert: i64,
     pub archived_path: Option<String>,
+    pub rejected_path: Option<String>,
     pub active: bool,
     pub site: Option<String>,
     pub unite: Option<String>,
@@ -90,7 +91,7 @@ pub struct MappingRow {
 #[tauri::command]
 pub async fn get_lines(state: State<'_, DbState>) -> Result<Vec<Line>, String> {
     let lines = sqlx::query_as::<_, Line>(
-        "SELECT id, name, path, prefix, interval_check, interval_alert, archived_path, active, 
+        "SELECT id, name, path, prefix, interval_check, interval_alert, archived_path, rejected_path, active, 
                 site, unite, flag_dec, code_ligne, log_path, file_format,
                 total_traites, total_erreurs, last_file_time, etat_actuel, created_at 
          FROM lines ORDER BY created_at DESC"
@@ -109,7 +110,7 @@ pub async fn save_line(state: State<'_, DbState>, line: Line) -> Result<i64, Str
         sqlx::query(
             "UPDATE lines SET 
                 name = ?, path = ?, prefix = ?, interval_check = ?, 
-                interval_alert = ?, archived_path = ?, active = ?,
+                interval_alert = ?, archived_path = ?, rejected_path = ?, active = ?,
                 site = ?, unite = ?, flag_dec = ?, code_ligne = ?, log_path = ?, file_format = ?
             WHERE id = ?"
         )
@@ -119,6 +120,7 @@ pub async fn save_line(state: State<'_, DbState>, line: Line) -> Result<i64, Str
         .bind(line.interval_check)
         .bind(line.interval_alert)
         .bind(&line.archived_path)
+        .bind(&line.rejected_path)
         .bind(line.active)
         .bind(&line.site)
         .bind(&line.unite)
@@ -135,9 +137,9 @@ pub async fn save_line(state: State<'_, DbState>, line: Line) -> Result<i64, Str
     } else {
         // Insert
         let id = sqlx::query(
-            "INSERT INTO lines (name, path, prefix, interval_check, interval_alert, archived_path, active, 
+            "INSERT INTO lines (name, path, prefix, interval_check, interval_alert, archived_path, rejected_path, active, 
                                site, unite, flag_dec, code_ligne, log_path, file_format) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(&line.name)
         .bind(&line.path)
@@ -145,6 +147,7 @@ pub async fn save_line(state: State<'_, DbState>, line: Line) -> Result<i64, Str
         .bind(line.interval_check)
         .bind(line.interval_alert)
         .bind(&line.archived_path)
+        .bind(&line.rejected_path)
         .bind(line.active)
         .bind(&line.site)
         .bind(&line.unite)
@@ -286,7 +289,7 @@ pub async fn stop_line_watcher(app_handle: AppHandle, id: i64) -> Result<(), Str
 #[tauri::command]
 pub async fn get_dashboard_snapshot(state: State<'_, DbState>) -> Result<Vec<DashboardLine>, String> {
     let lines = sqlx::query_as::<_, Line>(
-        "SELECT id, name, path, prefix, interval_check, interval_alert, archived_path, active, 
+        "SELECT id, name, path, prefix, interval_check, interval_alert, archived_path, rejected_path, active, 
                 site, unite, flag_dec, code_ligne, log_path, file_format,
                 total_traites, total_erreurs, last_file_time, etat_actuel, created_at 
          FROM lines ORDER BY created_at DESC"

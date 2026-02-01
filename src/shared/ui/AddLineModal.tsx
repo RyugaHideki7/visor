@@ -25,6 +25,7 @@ export interface LineFormData {
   interval_check: number;
   interval_alert: number;
   archived_path?: string;
+  rejected_path?: string;
   active: boolean;
   site?: string;
   unite?: string;
@@ -54,6 +55,7 @@ const defaultLine: LineFormData = {
   code_ligne: "",
   log_path: "",
   file_format: "ATEIS",
+  rejected_path: "",
 };
 
 export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineModalProps) {
@@ -137,7 +139,7 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
                 classNames={{
                   label: "text-[var(--text-secondary)]",
                   inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
-                  input: "text-[var(--text-primary)] placeholder:text-[var(--text-placeholder)]",
+                  input: "text-(--text-primary) placeholder:text-(--text-placeholder)",
                 }}
               />
 
@@ -153,7 +155,7 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
                     isIconOnly
                     size="sm"
                     variant="light"
-                    className="text-[var(--text-tertiary)]"
+                    className="text-(--text-tertiary)"
                     onPress={async () => {
                       const picked = await pickFolder(formData.path);
                       if (picked) setFormData((prev) => ({ ...prev, path: picked }));
@@ -165,7 +167,7 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
                 classNames={{
                   label: "text-[var(--text-secondary)]",
                   inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
-                  input: "text-[var(--text-primary)] placeholder:text-[var(--text-placeholder)]",
+                  input: "text-var(--text-primary) placeholder:text-var(--text-placeholder)",
                 }}
               />
 
@@ -181,7 +183,7 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
                   classNames={{
                     label: "text-[var(--text-secondary)]",
                     inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
-                    input: "text-[var(--text-primary)] placeholder:text-[var(--text-placeholder)]",
+                    input: "text-(--text-primary) placeholder:text-(--text-placeholder)",
                   }}
                 />
                 <Input
@@ -196,10 +198,38 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
                       isIconOnly
                       size="sm"
                       variant="light"
-                      className="text-[var(--text-tertiary)]"
+                      className="text-(--text-tertiary)"
                       onPress={async () => {
                         const picked = await pickFolder(formData.archived_path);
                         if (picked) setFormData((prev) => ({ ...prev, archived_path: picked }));
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faFolderOpen} />
+                    </Button>
+                  }
+                  className="flex-1"
+                  classNames={{
+                    label: "text-[var(--text-secondary)]",
+                    inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)] hover:border-[var(--accent-primary)] focus-within:border-[var(--accent-primary)]",
+                    input: "text-var(--text-primary) placeholder:text-var(--text-placeholder)",
+                  }}
+                />
+                <Input
+                  label="Dossier rejet (erreurs)"
+                  labelPlacement="outside"
+                  placeholder="C:/Rejected/LigneA"
+                  value={formData.rejected_path ?? ""}
+                  onValueChange={(val) => setFormData({ ...formData, rejected_path: val })}
+                  variant="bordered"
+                  endContent={
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      variant="light"
+                      className="text-var(--text-tertiary)"
+                      onPress={async () => {
+                        const picked = await pickFolder(formData.rejected_path);
+                        if (picked) setFormData((prev) => ({ ...prev, rejected_path: picked }));
                       }}
                     >
                       <FontAwesomeIcon icon={faFolderOpen} />
@@ -248,7 +278,7 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-2">
                   <Divider className="flex-1" />
-                  <p className="text-xs font-medium uppercase text-[var(--text-tertiary)]">Paramètres SQL</p>
+                  <p className="text-xs font-medium uppercase text-(--text-tertiary)">Paramètres SQL</p>
                   <Divider className="flex-1" />
                 </div>
 
@@ -327,7 +357,7 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
                         isIconOnly
                         size="sm"
                         variant="light"
-                        className="text-[var(--text-tertiary)]"
+                        className="text-(--text-tertiary)"
                         onPress={async () => {
                           const picked = await pickFolder(formData.log_path);
                           if (picked) setFormData((prev) => ({ ...prev, log_path: picked }));
@@ -362,8 +392,8 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
                       popoverContent: "bg-[var(--bg-secondary)] border border-[var(--border-default)]",
                     }}
                   >
-                    <SelectItem key="ATEIS" textValue="ATEIS" className="text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">ATEIS</SelectItem>
-                    <SelectItem key="LOGITRON" textValue="LOGITRON" className="text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">LOGITRON</SelectItem>
+                    <SelectItem key="ATEIS" textValue="ATEIS" className="text-(--text-primary) hover:bg-(--bg-hover)">ATEIS</SelectItem>
+                    <SelectItem key="LOGITRON" textValue="LOGITRON" className="text-(--text-primary) hover:bg-(--bg-hover)">LOGITRON</SelectItem>
                   </Select>
                 </div>
               </div>
@@ -372,7 +402,7 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
               <Button 
                 variant="light" 
                 onPress={handleClose}
-                className="text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+                className="text-(--text-primary) hover:bg-(--bg-hover)"
               >
                 Annuler
               </Button>
@@ -380,7 +410,7 @@ export function AddLineModal({ isOpen, onClose, onSave, initialData }: AddLineMo
                 color="primary" 
                 onPress={handleSave}
                 isLoading={isSaving}
-                className="bg-[var(--button-primary-bg)] text-white hover:bg-[var(--button-primary-hover)]"
+                className="bg-(--button-primary-bg) text-white hover:bg-(--button-primary-hover)"
               >
                 Sauvegarder
               </Button>

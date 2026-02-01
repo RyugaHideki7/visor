@@ -148,6 +148,7 @@ struct LineConfig {
     pub code_ligne: Option<String>,
     pub log_path: Option<String>,
     pub file_format: Option<String>,
+    pub rejected_path: Option<String>,
 }
 
 /// Disk logger for per-line log files (matches Python Logger class)
@@ -266,7 +267,7 @@ impl StockProcessor {
     /// Load line configuration for parameter resolution
     async fn load_line_config(&self, line_id: i64) -> Option<LineConfig> {
         let row = sqlx::query(
-            "SELECT name, site, unite, flag_dec, code_ligne, log_path, file_format 
+            "SELECT name, site, unite, flag_dec, code_ligne, log_path, file_format, rejected_path 
              FROM lines WHERE id = ?"
         )
         .bind(line_id)
@@ -282,6 +283,7 @@ impl StockProcessor {
             code_ligne: row.get("code_ligne"),
             log_path: row.get("log_path"),
             file_format: row.get("file_format"),
+            rejected_path: row.get("rejected_path"),
         })
     }
 
@@ -446,6 +448,22 @@ impl StockProcessor {
             let msg = format!("Échec traitement {}: {}", filename, error_msg.as_deref().unwrap_or("unknown"));
             DiskLogger::log_ligne(&line_name, &log_path, &msg, "ERROR");
             self.add_db_log(line_id, "ERROR", "FileProcessor", &msg, None).await;
+
+            // Move to rejected folder if configured
+            if let Some(reject_dir) = line_config.as_ref().and_then(|c| c.rejected_path.clone()) {
+                let reject_path = Path::new(&reject_dir);
+                if !reject_path.exists() {
+                    let _ = fs::create_dir_all(reject_path);
+                }
+
+                let new_filename = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("rejected.tmp")
+                    .to_string();
+                let dest_path = reject_path.join(new_filename);
+                let _ = fs::rename(&path, dest_path);
+            }
         } else {
             let msg = format!("Fichier {} traité avec succès - {} enregistrements", filename, row_count);
             DiskLogger::log_ligne(&line_name, &log_path, &msg, "INFO");
