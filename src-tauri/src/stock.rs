@@ -301,24 +301,53 @@ impl StockProcessor {
 
     /// Update line statistics after processing
     async fn update_line_stats(&self, line_id: i64, success: bool) {
-        let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-        
-        if success {
-            let _ = sqlx::query(
-                "UPDATE lines SET total_traites = total_traites + 1, last_file_time = ?, etat_actuel = 'MARCHE' WHERE id = ?"
-            )
-            .bind(&now)
+        let now_dt = Local::now();
+        let today = now_dt.date_naive();
+        let now_str = now_dt.format("%Y-%m-%d %H:%M:%S").to_string();
+
+        // Fetch current counters and last_file_time to detect day change
+        let mut total_traites: i64 = 0;
+        let mut total_erreurs: i64 = 0;
+        let mut last_date: Option<chrono::NaiveDate> = None;
+
+        if let Ok(row) = sqlx::query("SELECT total_traites, total_erreurs, last_file_time FROM lines WHERE id = ?")
             .bind(line_id)
-            .execute(&self.pool)
-            .await;
-        } else {
-            let _ = sqlx::query(
-                "UPDATE lines SET total_erreurs = total_erreurs + 1, etat_actuel = 'ERREUR' WHERE id = ?"
-            )
-            .bind(line_id)
-            .execute(&self.pool)
-            .await;
+            .fetch_one(&self.pool)
+            .await
+        {
+            total_traites = row.get::<i64, _>("total_traites");
+            total_erreurs = row.get::<i64, _>("total_erreurs");
+            if let Ok(ts) = row.try_get::<String, _>("last_file_time") {
+                if let Ok(parsed) = chrono::NaiveDateTime::parse_from_str(&ts, "%Y-%m-%d %H:%M:%S") {
+                    last_date = Some(parsed.date());
+                }
+            }
         }
+
+        // Reset daily counters if date changed (or missing last date)
+        if last_date.map(|d| d != today).unwrap_or(true) {
+            total_traites = 0;
+            total_erreurs = 0;
+        }
+
+        if success {
+            total_traites += 1;
+        } else {
+            total_erreurs += 1;
+        }
+
+        let status = if success { "MARCHE" } else { "ERREUR" };
+
+        let _ = sqlx::query(
+            "UPDATE lines SET total_traites = ?, total_erreurs = ?, last_file_time = ?, etat_actuel = ? WHERE id = ?"
+        )
+        .bind(total_traites)
+        .bind(total_erreurs)
+        .bind(now_str)
+        .bind(status)
+        .bind(line_id)
+        .execute(&self.pool)
+        .await;
     }
 
     /// Add log entry to database
@@ -541,7 +570,7 @@ fn apply_transformation(value: String, transformation: &str) -> String {
         "date" => {
             let v = value.trim();
             if v.is_empty() {
-                return Local::now().format("%Y-%m-%d").to_string();
+                return Local::now().format("%d/%m/%Y").to_string();
             }
 
             // Try multiple formats (same spirit as python)
@@ -558,10 +587,10 @@ fn apply_transformation(value: String, transformation: &str) -> String {
 
             for fmt in formats {
                 if let Ok(dt) = chrono::NaiveDate::parse_from_str(v, fmt) {
-                    return dt.format("%Y-%m-%d").to_string();
+                    return dt.format("%d/%m/%Y").to_string();
                 }
             }
-            Local::now().format("%Y-%m-%d").to_string()
+            Local::now().format("%d/%m/%Y").to_string()
         }
         "heure" => {
             let digits: String = value.chars().filter(|c| c.is_ascii_digit()).collect();
@@ -585,12 +614,12 @@ fn apply_transformation(value: String, transformation: &str) -> String {
             let n = value.trim().parse::<i64>().unwrap_or(1);
             if n == 2 { "2".to_string() } else { "1".to_string() }
         }
-        "current_datetime" => Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        "current_datetime" => Local::now().format("%d/%m/%Y %H:%M:%S").to_string(),
         "datetime_combine" => {
-            // Expects "date;time". Best-effort conversion to "YYYY-MM-DD HH:MM:SS".
+            // Expects "date;time". Best-effort conversion to "DD/MM/YYYY HH:MM:SS".
             let parts: Vec<&str> = value.split(';').collect();
             if parts.len() < 2 {
-                return Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                return Local::now().format("%d/%m/%Y %H:%M:%S").to_string();
             }
             let date_part = parts[0].trim();
             let time_part = parts[1].trim();
@@ -614,9 +643,9 @@ fn apply_transformation(value: String, transformation: &str) -> String {
             }
 
             if let (Some(d), Some(t)) = (date_obj, time_obj) {
-                chrono::NaiveDateTime::new(d, t).format("%Y-%m-%d %H:%M:%S").to_string()
+                chrono::NaiveDateTime::new(d, t).format("%d/%m/%Y %H:%M:%S").to_string()
             } else {
-                Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
+                Local::now().format("%d/%m/%Y %H:%M:%S").to_string()
             }
         }
         _ => value,
