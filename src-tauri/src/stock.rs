@@ -2,7 +2,7 @@ use notify::{Config, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::io::Write;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use sqlx::{Pool, Sqlite, Row};
 use tauri::AppHandle;
 use tauri::Manager;
@@ -51,10 +51,22 @@ impl StockProcessor {
         let cfg = self
             .load_sql_server_config()
             .await
-            .ok_or("SQL Server config introuvable")?;
+            .ok_or("SQL Server non configuré")?;
 
         if !cfg.enabled {
-            return Ok(()); // SQL disabled; treat as success
+            return Err("SQL Server désactivé (activez la connexion dans Paramètres)".to_string());
+        }
+
+        if cfg.server.as_deref().unwrap_or("").trim().is_empty() {
+            return Err("SQL Server: serveur manquant".to_string());
+        }
+
+        if cfg.username.as_deref().unwrap_or("").trim().is_empty() {
+            return Err("SQL Server: utilisateur manquant".to_string());
+        }
+
+        if cfg.password.as_deref().unwrap_or("").trim().is_empty() {
+            return Err("SQL Server: mot de passe manquant".to_string());
         }
 
         let format_name = line_config
@@ -311,14 +323,16 @@ impl StockProcessor {
 
     /// Add log entry to database
     async fn add_db_log(&self, line_id: i64, level: &str, source: &str, message: &str, details: Option<&str>) {
+        let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         let _ = sqlx::query(
-            "INSERT INTO logs (line_id, level, source, message, details) VALUES (?, ?, ?, ?, ?)"
+            "INSERT INTO logs (line_id, level, source, message, details, created_at) VALUES (?, ?, ?, ?, ?, ?)"
         )
         .bind(line_id)
         .bind(level)
         .bind(source)
         .bind(message)
         .bind(details)
+        .bind(now)
         .execute(&self.pool)
         .await;
     }
@@ -411,29 +425,6 @@ impl StockProcessor {
             error_msg = Some("Fichier vide ou format invalide".to_string());
         }
 
-        let status = if had_error { "ERROR" } else { "SUCCESS" };
-        let message = json!({
-            "rows": row_count,
-            "sample": first_mapped,
-            "error": error_msg,
-        })
-        .to_string();
-
-        // Insert production data record
-        sqlx::query(
-            "INSERT INTO production_data (line_id, filename, status, message) 
-             VALUES (?, ?, ?, ?)"
-        )
-        .bind(line_id)
-        .bind(&filename)
-        .bind(status)
-        .bind(&message)
-        .execute(&self.pool)
-        .await?;
-
-        // Update statistics
-        self.update_line_stats(line_id, !had_error).await;
-
         // Execute SQL Server inserts if enabled and we have mapped rows
         if !had_error && !all_mapped_values.is_empty() {
             if let Err(e) = self.execute_sql_server_inserts(line_config.as_ref(), &mappings, &all_mapped_values).await {
@@ -442,8 +433,34 @@ impl StockProcessor {
                 self.add_db_log(line_id, "ERROR", "SQLServer", &msg, None).await;
                 self.update_line_stats(line_id, false).await;
                 had_error = true;
+                error_msg = Some(msg);
             }
         }
+
+        let status = if had_error { "ERROR" } else { "SUCCESS" };
+        let message = json!({
+            "rows": row_count,
+            "sample": first_mapped,
+            "error": error_msg,
+        })
+        .to_string();
+
+        // Insert production data record reflecting final status
+        let processed_at = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        sqlx::query(
+            "INSERT INTO production_data (line_id, filename, status, message, processed_at) 
+             VALUES (?, ?, ?, ?, ?)"
+        )
+        .bind(line_id)
+        .bind(&filename)
+        .bind(status)
+        .bind(&message)
+        .bind(&processed_at)
+        .execute(&self.pool)
+        .await?;
+
+        // Update statistics
+        self.update_line_stats(line_id, !had_error).await;
 
         // Log result
         if had_error {
@@ -760,9 +777,27 @@ pub fn start_watcher(app_handle: AppHandle, line_id: i64, path: String, prefix: 
 
         watcher.watch(watch_path, RecursiveMode::NonRecursive).expect("failed to watch path");
 
+        let mut last_scan = Instant::now();
+
         loop {
             if stop_rx.try_recv().is_ok() {
                 break;
+            }
+
+            // Fallback poll to catch files when FS events are missed (e.g., network shares).
+            if last_scan.elapsed() >= Duration::from_secs(5) {
+                for p in scan_existing_files(watch_path, &prefix) {
+                    let pr = processor.pool.clone();
+                    let proc = StockProcessor::new(pr);
+                    let pref = prefix.clone();
+                    let arch = archived_path.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = proc.process_file(line_id, p, pref, arch).await {
+                            eprintln!("Error processing polled file: {}", e);
+                        }
+                    });
+                }
+                last_scan = Instant::now();
             }
 
             let recv = match rx.recv_timeout(Duration::from_millis(500)) {
