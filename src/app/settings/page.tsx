@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faDatabase, faServer, faUser, faLock, faCheck, faSpinner } from "@fortawesome/free-solid-svg-icons";
+import { faDatabase, faServer, faUser, faLock, faCheck, faSpinner, faArrowRotateRight, faCloudArrowDown } from "@fortawesome/free-solid-svg-icons";
+import { check } from "@tauri-apps/plugin-updater";
 
 interface SqlServerConfig {
   id: number;
@@ -19,6 +20,14 @@ interface ConnectionTestResult {
   error: string | null;
 }
 
+type UpdateStatus =
+  | { state: "idle" }
+  | { state: "checking" }
+  | { state: "available"; version: string }
+  | { state: "downloading"; version: string; progress?: number }
+  | { state: "ready"; version: string }
+  | { state: "error"; message: string };
+
 export default function Settings() {
   const [config, setConfig] = useState<SqlServerConfig>({
     id: 1,
@@ -32,6 +41,7 @@ export default function Settings() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ state: "idle" });
 
   useEffect(() => {
     loadConfig();
@@ -49,6 +59,37 @@ export default function Settings() {
       });
     } catch (error) {
       console.error("Failed to load SQL Server config:", error);
+    }
+  };
+
+  const handleCheckUpdate = async () => {
+    setUpdateStatus({ state: "checking" });
+    try {
+      const result = await check();
+      if (!result) {
+        setUpdateStatus({ state: "idle" });
+        return;
+      }
+      if (result.available) {
+        const version = result.version ?? "";
+        setUpdateStatus({ state: "available", version });
+
+        await result.downloadAndInstall((event) => {
+          if (event.event === "Progress") {
+            setUpdateStatus({ state: "downloading", version });
+          }
+        });
+
+        // If download succeeded, finalize and restart
+        await result.install();
+        setUpdateStatus({ state: "ready", version });
+
+        // Tauri will relaunch on install(); in case it doesn't, you can prompt restart
+      } else {
+        setUpdateStatus({ state: "idle" });
+      }
+    } catch (err) {
+      setUpdateStatus({ state: "error", message: String(err) });
     }
   };
 
@@ -99,6 +140,84 @@ export default function Settings() {
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
           Configuration de l'application et connexion SQL Server
         </p>
+      </div>
+
+      {/* Mises à jour */}
+      <div 
+        style={{ 
+          background: "var(--bg-secondary)", 
+          borderRadius: 12, 
+          border: "1px solid var(--border-default)",
+          overflow: "hidden" 
+        }}
+      >
+        <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-default)" }}>
+          <div className="flex items-center gap-3">
+            <div 
+              className="p-2 rounded-lg"
+              style={{ background: "var(--color-warning-bg)", color: "var(--color-warning)" }}
+            >
+              <FontAwesomeIcon icon={faArrowRotateRight} className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>Mises à jour</h2>
+              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                Vérifier et installer automatiquement les nouvelles versions
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleCheckUpdate}
+            disabled={updateStatus.state === "checking" || updateStatus.state === "downloading"}
+            className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
+            style={{
+              background: "var(--button-secondary-bg)",
+              color: "var(--text-primary)",
+              border: "1px solid var(--border-default)",
+              opacity: updateStatus.state === "checking" || updateStatus.state === "downloading" ? 0.6 : 1,
+            }}
+          >
+            {updateStatus.state === "checking" || updateStatus.state === "downloading" ? (
+              <FontAwesomeIcon icon={faSpinner} className="h-4 w-4 animate-spin" />
+            ) : (
+              <FontAwesomeIcon icon={faCloudArrowDown} className="h-4 w-4" />
+            )}
+            {updateStatus.state === "checking" && "Recherche..."}
+            {updateStatus.state === "downloading" && "Téléchargement..."}
+            {updateStatus.state === "available" && "Installer la mise à jour"}
+            {updateStatus.state === "ready" && "Redémarrage..."}
+            {updateStatus.state === "idle" && "Rechercher une mise à jour"}
+            {updateStatus.state === "error" && "Réessayer"}
+          </button>
+        </div>
+
+        <div className="p-6 flex flex-col gap-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+          {updateStatus.state === "available" && (
+            <div style={{ color: "var(--color-info)", background: "var(--color-info-bg)", padding: "8px 12px", borderRadius: 8 }}>
+              Nouvelle version disponible: {updateStatus.version}
+            </div>
+          )}
+          {updateStatus.state === "downloading" && (
+            <div style={{ color: "var(--color-warning)" }}>
+              Téléchargement...
+            </div>
+          )}
+          {updateStatus.state === "ready" && (
+            <div style={{ color: "var(--color-success)" }}>
+              Mise à jour téléchargée. L'application va redémarrer pour appliquer la mise à jour.
+            </div>
+          )}
+          {updateStatus.state === "error" && (
+            <div style={{ color: "var(--color-error)" }}>
+              Échec de mise à jour: {updateStatus.message}
+            </div>
+          )}
+          {updateStatus.state === "idle" && (
+            <div>
+              Les mises à jour seront proposées automatiquement si une nouvelle version est disponible.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* SQL Server Configuration */}

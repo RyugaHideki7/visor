@@ -1,8 +1,10 @@
 use tauri::Manager;
 use tauri_plugin_single_instance::init as single_instance_init;
+use tauri_plugin_updater;
 
 pub fn run_app() {
   tauri::Builder::default()
+    .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(single_instance_init(|app, _args, _cwd| {
       // On second launch, focus existing window instead of spawning another instance.
       if let Some(window) = app.get_webview_window("main") {
