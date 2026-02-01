@@ -13,6 +13,7 @@ import {
   faCircleCheck
 } from "@fortawesome/free-solid-svg-icons";
 import { Select, SelectItem, Button } from "@heroui/react";
+import { ConfirmDialog, useConfirmDialog } from "@/shared/ui/ConfirmDialog";
 
 interface LogEntry {
   id: number;
@@ -42,6 +43,7 @@ export default function Journaux() {
   const [selectedLineId, setSelectedLineId] = useState<string>("");
   const [selectedLevel, setSelectedLevel] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
+  const confirmDialog = useConfirmDialog();
 
   const lineOptions = useMemo(() => [
     { key: "", name: "Toutes les lignes" },
@@ -101,8 +103,15 @@ export default function Journaux() {
   };
 
   const handleClearLogs = async () => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer tous les journaux ?")) return;
-    
+    const confirmed = await confirmDialog.open({
+      title: "Confirmation",
+      message: "Êtes-vous sûr de vouloir supprimer tous les journaux ?",
+      confirmText: "Supprimer",
+      cancelText: "Annuler",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+
     try {
       const params: { lineId?: number } = {};
       if (selectedLineId) params.lineId = parseInt(selectedLineId);
@@ -164,6 +173,8 @@ export default function Journaux() {
           </Button>
         </div>
       </div>
+
+      <ConfirmDialog {...confirmDialog.props} />
 
       {/* Filters */}
       <div className="flex gap-4 items-center">

@@ -14,6 +14,11 @@ interface SqlServerConfig {
   enabled: boolean;
 }
 
+interface ConnectionTestResult {
+  success: boolean;
+  error: string | null;
+}
+
 export default function Settings() {
   const [config, setConfig] = useState<SqlServerConfig>({
     id: 1,
@@ -25,6 +30,8 @@ export default function Settings() {
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
 
   useEffect(() => {
     loadConfig();
@@ -62,6 +69,20 @@ export default function Settings() {
       console.error("Failed to save SQL Server config:", error);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const res = await invoke<ConnectionTestResult>("test_sql_server_connection");
+      setTestResult(res);
+    } catch (error) {
+      console.error("Failed to test SQL Server connection:", error);
+      setTestResult({ success: false, error: String(error) });
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -122,6 +143,20 @@ export default function Settings() {
         </div>
 
         <div className="p-6 flex flex-col gap-4">
+          {testResult && (
+            <div
+              className="px-4 py-2 rounded-lg text-sm"
+              style={{
+                background: testResult.success ? "var(--color-success-bg)" : "var(--color-error-bg)",
+                color: testResult.success ? "var(--color-success)" : "var(--color-error)",
+              }}
+            >
+              {testResult.success
+                ? "✅ Connexion à la base de données réussie"
+                : `❌ Échec de connexion: ${testResult.error ?? "Erreur inconnue"}`}
+            </div>
+          )}
+
           <div className="flex gap-4">
             <div className="flex-1">
               <label className="flex items-center gap-2 text-sm mb-2" style={{ color: "var(--text-secondary)" }}>
@@ -193,6 +228,21 @@ export default function Settings() {
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={handleTestConnection}
+              disabled={isSaving || isTesting}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+              style={{ background: "var(--bg-tertiary)", color: "var(--text-primary)", border: "1px solid var(--border-default)" }}
+              onMouseEnter={(e) => !isTesting && (e.currentTarget.style.borderColor = "var(--accent-primary)")}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
+            >
+              {isTesting ? (
+                <FontAwesomeIcon icon={faSpinner} className="h-4 w-4 animate-spin" />
+              ) : (
+                <FontAwesomeIcon icon={faDatabase} className="h-4 w-4" />
+              )}
+              Tester connexion
+            </button>
             <button
               onClick={handleSave}
               disabled={isSaving}

@@ -70,6 +70,7 @@ pub fn run_app() {
         crate::commands::get_lines,
         crate::commands::save_line,
         crate::commands::delete_line,
+        crate::commands::test_sql_server_connection,
         crate::commands::toggle_line_active,
         crate::commands::start_line_watcher,
         crate::commands::stop_line_watcher,
