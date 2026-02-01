@@ -23,6 +23,13 @@ const statusColorMap: Record<string, "success" | "warning" | "default" | "danger
     ERREUR: "danger",
 };
 
+const statusClassMap: Record<string, string> = {
+    MARCHE: "status-chip status-chip-green",
+    ALERTE: "status-chip status-chip-orange",
+    ARRET: "status-chip status-chip-red",
+    ERREUR: "status-chip status-chip-red",
+};
+
 export default function Dashboard() {
     const [lineStatuses, setLineStatuses] = useState<LineStatus[]>([]);
 
@@ -38,7 +45,21 @@ export default function Dashboard() {
     useEffect(() => {
         fetchStatus();
         const interval = setInterval(fetchStatus, 5000);
-        return () => clearInterval(interval);
+        const onFocus = () => fetchStatus();
+        const onVisibility = () => {
+            if (document.visibilityState === "visible") {
+                fetchStatus();
+            }
+        };
+
+        window.addEventListener("focus", onFocus);
+        document.addEventListener("visibilitychange", onVisibility);
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener("focus", onFocus);
+            document.removeEventListener("visibilitychange", onVisibility);
+        };
     }, []);
 
     const getProgressValue = (status: string) => {
@@ -84,7 +105,7 @@ export default function Dashboard() {
                                     color={statusColor} 
                                     variant="flat" 
                                     size="sm"
-                                    className="font-medium"
+                                    className={`font-medium ${statusClassMap[line.status] ?? ""}`}
                                 >
                                     {line.status}
                                 </Chip>

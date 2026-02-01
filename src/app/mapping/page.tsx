@@ -189,7 +189,7 @@ export default function MappingPage() {
                       type="text"
                       value={r.sql_field}
                       onValueChange={(val) => handleUpdateRow(idx, { sql_field: val })}
-                      placeholder="ex: YSCC_0"
+                      placeholder="ex: YSSCC_0"
                       size="sm"
                       variant="bordered"
                       classNames={{

@@ -154,7 +154,7 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
     // Insert default SQL queries for ATEIS and LOGITRON formats
     let default_ateis_query = r#"INSERT INTO ITHRITEST.YINTDECL (
     MFGNUM_0, FCY_0, ITMREF_0, QTY_0, UOM_0, 
-    YSCC_0, YFLGDEC_0, LOT_0, CREDATTIM_0, 
+    YSSCC_0, YFLGDEC_0, LOT_0, CREDATTIM_0, 
     CREUSR_0, YDATE_0, YHEURE_0, YNLIGN_0, 
     YDATDL_0, YCODEPOT_0, YPALETTE_0, YINTERCAL_0
 ) VALUES (
@@ -166,7 +166,7 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
 
     let default_logitron_query = r#"INSERT INTO ITHRITEST.YINTDECL (
     MFGNUM_0, FCY_0, ITMREF_0, QTY_0, UOM_0, 
-    YSCC_0, YFLGDEC_0, LOT_0, CREDATTIM_0, 
+    YSSCC_0, YFLGDEC_0, LOT_0, CREDATTIM_0, 
     CREUSR_0, YDATE_0, YHEURE_0, YNLIGN_0, 
     YDATDL_0, YCODEPOT_0, YPALETTE_0, YINTERCAL_0
 ) VALUES (

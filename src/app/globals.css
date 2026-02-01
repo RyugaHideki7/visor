@@ -59,6 +59,22 @@
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
+@keyframes status-pulse {
+  0% { box-shadow: 0 0 0 0 currentColor; }
+  70% { box-shadow: 0 0 0 10px rgba(0,0,0,0); }
+  100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); }
+}
+
+.status-chip {
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  animation: status-pulse 2.4s ease-in-out infinite;
+}
+
+.status-chip-green { color: var(--color-success); background: var(--color-success-bg); }
+.status-chip-orange { color: var(--color-warning); background: var(--color-warning-bg); }
+.status-chip-red { color: var(--color-error); background: var(--color-error-bg); }
+
 /* Light Mode */
 :root.light {
   /* Backgrounds */

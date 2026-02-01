@@ -637,7 +637,7 @@ pub async fn get_default_mappings(format_name: String) -> Result<Vec<MappingRow>
 
 fn get_ateis_default_mappings() -> Vec<MappingRow> {
     vec![
-        MappingRow { id: None, line_id: 0, sort_order: 0, sql_field: "YSCC_0".to_string(), file_column: Some("0".to_string()), parameter: None, transformation: None, description: Some("Code SCC".to_string()) },
+        MappingRow { id: None, line_id: 0, sort_order: 0, sql_field: "YSSCC_0".to_string(), file_column: Some("0".to_string()), parameter: None, transformation: None, description: Some("Code SCC".to_string()) },
         MappingRow { id: None, line_id: 0, sort_order: 1, sql_field: "YDATE_0".to_string(), file_column: Some("1".to_string()), parameter: None, transformation: Some("date".to_string()), description: Some("Date déclaration".to_string()) },
         MappingRow { id: None, line_id: 0, sort_order: 2, sql_field: "YHEURE_0".to_string(), file_column: Some("2".to_string()), parameter: None, transformation: Some("heure".to_string()), description: Some("Heure déclaration".to_string()) },
         MappingRow { id: None, line_id: 0, sort_order: 3, sql_field: "ITMREF_0".to_string(), file_column: Some("3".to_string()), parameter: None, transformation: None, description: Some("Référence article".to_string()) },
@@ -659,7 +659,7 @@ fn get_ateis_default_mappings() -> Vec<MappingRow> {
 
 fn get_logitron_default_mappings() -> Vec<MappingRow> {
     vec![
-        MappingRow { id: None, line_id: 0, sort_order: 0, sql_field: "YSCC_0".to_string(), file_column: Some("0".to_string()), parameter: None, transformation: None, description: Some("Code SCC".to_string()) },
+        MappingRow { id: None, line_id: 0, sort_order: 0, sql_field: "YSSCC_0".to_string(), file_column: Some("0".to_string()), parameter: None, transformation: None, description: Some("Code SCC".to_string()) },
         MappingRow { id: None, line_id: 0, sort_order: 1, sql_field: "YDATE_0".to_string(), file_column: Some("1".to_string()), parameter: None, transformation: Some("date".to_string()), description: Some("Date déclaration".to_string()) },
         MappingRow { id: None, line_id: 0, sort_order: 2, sql_field: "YHEURE_0".to_string(), file_column: Some("2".to_string()), parameter: None, transformation: Some("heure".to_string()), description: Some("Heure déclaration".to_string()) },
         MappingRow { id: None, line_id: 0, sort_order: 3, sql_field: "CREDATTIM_0".to_string(), file_column: Some("1-2".to_string()), parameter: None, transformation: Some("datetime_combine".to_string()), description: Some("Date/heure création combinée".to_string()) },
