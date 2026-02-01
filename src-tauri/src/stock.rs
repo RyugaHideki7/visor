@@ -326,8 +326,10 @@ impl StockProcessor {
     pub async fn process_file(&self, line_id: i64, path: PathBuf, prefix: String, archived_path: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         let filename = path.file_name().unwrap().to_str().unwrap().to_string();
         
-        // Basic check for prefix and extension as in Python code
-        if !filename.to_uppercase().contains(&prefix.to_uppercase()) || !filename.to_uppercase().ends_with(".TMP") {
+        // Basic check for prefix and allowed extensions (TMP, CSV, TXT)
+        let upper = filename.to_uppercase();
+        let allowed_ext = upper.ends_with(".TMP") || upper.ends_with(".CSV") || upper.ends_with(".TXT");
+        if !upper.contains(&prefix.to_uppercase()) || !allowed_ext {
             return Ok(());
         }
 
@@ -701,7 +703,8 @@ fn scan_existing_files(path: &Path, prefix: &str) -> Vec<PathBuf> {
             };
 
             let upper = filename.to_uppercase();
-            if upper.ends_with(".TMP") && upper.contains(&prefix.to_uppercase()) {
+            let allowed_ext = upper.ends_with(".TMP") || upper.ends_with(".CSV") || upper.ends_with(".TXT");
+            if allowed_ext && upper.contains(&prefix.to_uppercase()) {
                 matches.push(p);
             }
         }
