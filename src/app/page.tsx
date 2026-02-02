@@ -75,14 +75,14 @@ export default function Dashboard() {
                 <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Statut en temps réel des lignes de production</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-fr">
                 {lineStatuses.map((line) => {
                     const statusColor = statusColorMap[line.status] || "default";
                     
                     return (
                         <Card 
                             key={line.id} 
-                            className="bg-(--bg-secondary) border border-(--border-default) shadow-sm"
+                            className="bg-(--bg-secondary) border border-(--border-default) shadow-sm h-full"
                             radius="lg"
                         >
                             <CardHeader className="flex justify-between items-start p-5">
