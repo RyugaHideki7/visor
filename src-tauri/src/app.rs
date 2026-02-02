@@ -88,6 +88,8 @@ pub fn run_app() {
         crate::commands::get_dashboard_snapshot,
         crate::commands::get_mappings,
         crate::commands::save_mappings,
+        crate::commands::get_model_mappings,
+        crate::commands::save_model_mappings,
         crate::commands::get_production_data,
         crate::commands::get_sql_server_config,
         crate::commands::save_sql_server_config,
@@ -97,7 +99,6 @@ pub fn run_app() {
         crate::commands::get_sql_queries,
         crate::commands::save_sql_query,
         crate::commands::get_default_mappings,
-        crate::commands::create_default_mappings_for_line,
         crate::commands::reset_line_stats
     ])
     .run(tauri::generate_context!())

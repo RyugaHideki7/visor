@@ -408,12 +408,17 @@ impl StockProcessor {
             .flexible(true)
             .from_reader(content.as_bytes());
 
-        // Load mappings for this line
+        // Load mappings for this line (global model mappings by file_format)
+        let format_name = line_config
+            .as_ref()
+            .and_then(|l| l.file_format.clone())
+            .unwrap_or_else(|| "ATEIS".to_string());
+
         let mappings = sqlx::query_as::<_, MappingRow>(
-            "SELECT id, line_id, sort_order, sql_field, file_column, parameter, transformation, description \
-             FROM mappings WHERE line_id = ? ORDER BY sort_order ASC, id ASC",
+            "SELECT id, 0 as line_id, sort_order, sql_field, file_column, parameter, transformation, description \
+             FROM model_mappings WHERE format_name = ? ORDER BY sort_order ASC, id ASC",
         )
-        .bind(line_id)
+        .bind(format_name.to_uppercase())
         .fetch_all(&self.pool)
         .await
         .unwrap_or_default();
@@ -423,6 +428,14 @@ impl StockProcessor {
         let mut had_error = false;
         let mut error_msg: Option<String> = None;
         let mut all_mapped_values: Vec<HashMap<String, String>> = Vec::new();
+
+        if mappings.is_empty() {
+            had_error = true;
+            error_msg = Some(format!(
+                "Aucun mapping configuré pour le modèle {}",
+                format_name.to_uppercase()
+            ));
+        }
 
         for result in rdr.records() {
             let record = match result {
@@ -435,10 +448,6 @@ impl StockProcessor {
             };
 
             row_count += 1;
-
-            if mappings.is_empty() {
-                continue;
-            }
 
             // Map record with line config for parameter resolution
             let mapped = map_record_with_mappings_and_params(&record, &mappings, &line_config);

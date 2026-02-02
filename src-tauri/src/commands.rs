@@ -2,7 +2,7 @@ use crate::db::DbState;
 use crate::stock;
 use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
+use sqlx::{FromRow, Pool, Sqlite};
 use tauri::{State, AppHandle};
 use tiberius::{Client, AuthMethod, Config as SqlConfig};
 use tokio_util::compat::TokioAsyncWriteCompatExt;
@@ -86,6 +86,81 @@ pub struct MappingRow {
     pub parameter: Option<String>,
     pub transformation: Option<String>,
     pub description: Option<String>,
+}
+
+async fn save_model_mappings_to_db(pool: &Pool<Sqlite>, format_name: &str, mappings: Vec<MappingRow>) -> Result<(), String> {
+    let fmt = format_name.to_uppercase();
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+
+    sqlx::query("DELETE FROM model_mappings WHERE format_name = ?")
+        .bind(&fmt)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    for (idx, m) in mappings.into_iter().enumerate() {
+        let sort_order = if m.sort_order != 0 { m.sort_order } else { idx as i64 };
+
+        sqlx::query(
+            "INSERT INTO model_mappings (format_name, sort_order, sql_field, file_column, parameter, transformation, description) \
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&fmt)
+        .bind(sort_order)
+        .bind(m.sql_field)
+        .bind(m.file_column)
+        .bind(m.parameter)
+        .bind(m.transformation)
+        .bind(m.description)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_model_mappings(state: State<'_, DbState>, format_name: String) -> Result<Vec<MappingRow>, String> {
+    let fmt = format_name.to_uppercase();
+
+    let rows = sqlx::query_as::<_, MappingRow>(
+        "SELECT id, 0 as line_id, sort_order, sql_field, file_column, parameter, transformation, description \
+         FROM model_mappings WHERE format_name = ? ORDER BY sort_order ASC, id ASC",
+    )
+    .bind(&fmt)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    if !rows.is_empty() {
+        return Ok(rows);
+    }
+
+    let defaults = match fmt.as_str() {
+        "ATEIS" => get_ateis_default_mappings(),
+        "LOGITRON" => get_logitron_default_mappings(),
+        _ => get_ateis_default_mappings(),
+    };
+
+    save_model_mappings_to_db(&state.pool, &fmt, defaults).await?;
+
+    let rows = sqlx::query_as::<_, MappingRow>(
+        "SELECT id, 0 as line_id, sort_order, sql_field, file_column, parameter, transformation, description \
+         FROM model_mappings WHERE format_name = ? ORDER BY sort_order ASC, id ASC",
+    )
+    .bind(&fmt)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(rows)
+}
+
+#[tauri::command]
+pub async fn save_model_mappings(state: State<'_, DbState>, format_name: String, mappings: Vec<MappingRow>) -> Result<(), String> {
+    save_model_mappings_to_db(&state.pool, &format_name, mappings).await
 }
 
 #[tauri::command]
@@ -677,50 +752,6 @@ fn get_logitron_default_mappings() -> Vec<MappingRow> {
         MappingRow { id: None, line_id: 0, sort_order: 15, sql_field: "YFLGDEC_0".to_string(), file_column: None, parameter: Some("flag_dec".to_string()), transformation: Some("tinyint".to_string()), description: Some("Flag déclaration".to_string()) },
         MappingRow { id: None, line_id: 0, sort_order: 16, sql_field: "CREUSR_0".to_string(), file_column: None, parameter: Some("code_ligne".to_string()), transformation: None, description: Some("Utilisateur création".to_string()) },
     ]
-}
-
-/// Create default mappings for a line when it's created
-#[tauri::command]
-pub async fn create_default_mappings_for_line(
-    state: State<'_, DbState>,
-    line_id: i64,
-    format_name: String,
-) -> Result<(), String> {
-    let mappings = match format_name.to_uppercase().as_str() {
-        "ATEIS" => get_ateis_default_mappings(),
-        "LOGITRON" => get_logitron_default_mappings(),
-        _ => get_ateis_default_mappings(),
-    };
-
-    let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
-
-    // Clear existing mappings for this line
-    sqlx::query("DELETE FROM mappings WHERE line_id = ?")
-        .bind(line_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // Insert default mappings
-    for m in mappings {
-        sqlx::query(
-            "INSERT INTO mappings (line_id, sort_order, sql_field, file_column, parameter, transformation, description) 
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
-        )
-        .bind(line_id)
-        .bind(m.sort_order)
-        .bind(&m.sql_field)
-        .bind(&m.file_column)
-        .bind(&m.parameter)
-        .bind(&m.transformation)
-        .bind(&m.description)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
-    }
-
-    tx.commit().await.map_err(|e| e.to_string())?;
-    Ok(())
 }
 
 /// Reset line statistics

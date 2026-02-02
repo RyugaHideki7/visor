@@ -101,21 +101,7 @@ export default function LinesPage() {
 
     const handleSave = async (line: LineFormData) => {
 
-        const isNewLine = !line.id;
-
         const lineId = await invoke<number>("save_line", { line });
-
-        // Create default mappings for new lines based on file format
-        if (isNewLine && lineId) {
-            try {
-                await invoke("create_default_mappings_for_line", { 
-                    lineId, 
-                    formatName: line.file_format || "ATEIS" 
-                });
-            } catch (error) {
-                console.error("Failed to create default mappings:", error);
-            }
-        }
 
         setEditingLine(null);
         fetchLines();

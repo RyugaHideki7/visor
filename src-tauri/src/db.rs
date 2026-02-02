@@ -3,6 +3,40 @@ use std::fs;
 use tauri::AppHandle;
 use tauri::Manager;
 
+async fn seed_model(
+    pool: &Pool<Sqlite>,
+    format_name: &str,
+    rows: Vec<(i64, &str, Option<&str>, Option<&str>, Option<&str>, Option<&str>)>,
+) -> Result<(), sqlx::Error> {
+    let existing: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM model_mappings WHERE format_name = ?")
+        .bind(format_name)
+        .fetch_one(pool)
+        .await
+        .unwrap_or(0);
+
+    if existing > 0 {
+        return Ok(());
+    }
+
+    for (sort_order, sql_field, file_column, parameter, transformation, description) in rows {
+        let _ = sqlx::query(
+            "INSERT OR IGNORE INTO model_mappings (format_name, sort_order, sql_field, file_column, parameter, transformation, description) \
+             VALUES (?, ?, ?, ?, ?, ?, ?)"
+        )
+        .bind(format_name)
+        .bind(sort_order)
+        .bind(sql_field)
+        .bind(file_column)
+        .bind(parameter)
+        .bind(transformation)
+        .bind(description)
+        .execute(pool)
+        .await?;
+    }
+
+    Ok(())
+}
+
 pub struct DbState {
     pub pool: Pool<Sqlite>,
 }
@@ -76,6 +110,72 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
         )",
     )
     .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS model_mappings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            format_name TEXT NOT NULL,
+            sort_order INTEGER DEFAULT 0,
+            sql_field TEXT NOT NULL,
+            file_column TEXT,
+            parameter TEXT,
+            transformation TEXT,
+            description TEXT,
+            UNIQUE(format_name, sort_order)
+        )",
+    )
+    .execute(&pool)
+    .await?;
+
+    seed_model(
+        &pool,
+        "ATEIS",
+        vec![
+            (0, "YSSCC_0", Some("0"), None, None, Some("Code SCC")),
+            (1, "YDATE_0", Some("1"), None, Some("date"), Some("Date déclaration")),
+            (2, "YHEURE_0", Some("2"), None, Some("heure"), Some("Heure déclaration")),
+            (3, "ITMREF_0", Some("3"), None, None, Some("Référence article")),
+            (4, "LOT_0", Some("4"), None, None, Some("Numéro de lot")),
+            (5, "QTY_0", Some("5"), None, Some("decimal"), Some("Quantité")),
+            (6, "YDATDL_0", Some("7"), None, Some("date"), Some("Date livraison")),
+            (7, "YNLIGN_0", Some("8"), None, None, Some("Numéro de ligne")),
+            (8, "MFGNUM_0", Some("13"), None, None, Some("Numéro de fabrication")),
+            (9, "YCODEPOT_0", Some("14"), None, None, Some("Code dépôt")),
+            (10, "YPALETTE_0", Some("15"), None, Some("split_before_plus"), Some("Partie avant +")),
+            (11, "YINTERCAL_0", Some("15"), None, Some("split_after_plus"), Some("Partie après +")),
+            (12, "FCY_0", None, Some("site"), None, Some("Site de production")),
+            (13, "UOM_0", None, Some("unite"), None, Some("Unité de mesure")),
+            (14, "YFLGDEC_0", None, Some("flag_dec"), Some("tinyint"), Some("Flag déclaration")),
+            (15, "CREUSR_0", None, Some("code_ligne"), None, Some("Utilisateur création")),
+            (16, "CREDATTIM_0", None, None, Some("current_datetime"), Some("Date/heure création")),
+        ],
+    )
+    .await?;
+
+    seed_model(
+        &pool,
+        "LOGITRON",
+        vec![
+            (0, "YSSCC_0", Some("0"), None, None, Some("Code SCC")),
+            (1, "YDATE_0", Some("1"), None, Some("date"), Some("Date déclaration")),
+            (2, "YHEURE_0", Some("2"), None, Some("heure"), Some("Heure déclaration")),
+            (3, "CREDATTIM_0", Some("1-2"), None, Some("datetime_combine"), Some("Date/heure création combinée")),
+            (4, "ITMREF_0", Some("3"), None, None, Some("Référence article")),
+            (5, "LOT_0", Some("4"), None, None, Some("Numéro de lot")),
+            (6, "QTY_0", Some("5"), None, Some("decimal"), Some("Quantité")),
+            (7, "YDATDL_0", Some("7"), None, Some("date"), Some("Date livraison")),
+            (8, "YNLIGN_0", Some("8"), None, None, Some("Numéro de ligne")),
+            (9, "MFGNUM_0", Some("13"), None, None, Some("Numéro de fabrication")),
+            (10, "YCODEPOT_0", Some("14"), None, None, Some("Code dépôt")),
+            (11, "YPALETTE_0", Some("15"), None, Some("split_before_plus"), Some("Partie avant +")),
+            (12, "YINTERCAL_0", Some("15"), None, Some("split_after_plus"), Some("Partie après +")),
+            (13, "FCY_0", None, Some("site"), None, Some("Site de production")),
+            (14, "UOM_0", None, Some("unite"), None, Some("Unité de mesure")),
+            (15, "YFLGDEC_0", None, Some("flag_dec"), Some("tinyint"), Some("Flag déclaration")),
+            (16, "CREUSR_0", None, Some("code_ligne"), None, Some("Utilisateur création")),
+        ],
+    )
     .await?;
 
     sqlx::query(

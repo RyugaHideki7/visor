@@ -6,14 +6,8 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { Select, SelectItem, Button, Input } from "@heroui/react";
 
-type Line = {
-  id?: number;
-  name: string;
-};
-
 type MappingRow = {
   id?: number;
-  line_id: number;
   sort_order: number;
   sql_field: string;
   file_column?: string | null;
@@ -23,57 +17,41 @@ type MappingRow = {
 };
 
 export default function MappingPage() {
-  const [lines, setLines] = useState<Line[]>([]);
-  const [selectedLineId, setSelectedLineId] = useState<string>("");
+  const [selectedFormat, setSelectedFormat] = useState<string>("ATEIS");
   const [rows, setRows] = useState<MappingRow[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
-  const lineIdNumber = useMemo(() => {
-    const n = Number(selectedLineId);
-    return Number.isFinite(n) ? n : null;
-  }, [selectedLineId]);
-
-  const handleSelectLine = (keys: any) => {
+  const handleSelectFormat = (keys: any) => {
     const first = Array.from(keys)[0] as string | undefined;
-    setSelectedLineId(first ?? "");
+    setSelectedFormat(first ?? "ATEIS");
   };
 
-  const lineOptions = useMemo(() => [
-    { key: "", name: "Sélectionner une ligne" },
-    ...lines.map((l) => ({ key: String(l.id), name: l.name })),
-  ], [lines]);
+  const formatOptions = useMemo(
+    () => [
+      { key: "ATEIS", name: "ATEIS" },
+      { key: "LOGITRON", name: "LOGITRON" },
+    ],
+    []
+  );
 
-  const loadLines = async () => {
-    const res = await invoke<any[]>("get_lines");
-    const mapped: Line[] = res.map((l) => ({ id: l.id, name: l.name }));
-    setLines(mapped);
-    if (!selectedLineId && mapped.length > 0 && mapped[0].id != null) {
-      setSelectedLineId(String(mapped[0].id));
-    }
-  };
-
-  const loadMappings = async (id: number) => {
-    const res = await invoke<MappingRow[]>("get_mappings", { lineId: id });
+  const loadMappings = async (formatName: string) => {
+    const res = await invoke<MappingRow[]>("get_model_mappings", { formatName });
     setRows(res);
   };
 
   useEffect(() => {
-    loadLines().catch((e) => console.error(e));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadMappings(selectedFormat).catch((e) => console.error(e));
   }, []);
 
   useEffect(() => {
-    if (lineIdNumber == null) return;
-    loadMappings(lineIdNumber).catch((e) => console.error(e));
-  }, [lineIdNumber]);
+    loadMappings(selectedFormat).catch((e) => console.error(e));
+  }, [selectedFormat]);
 
   const handleAddRow = () => {
-    if (lineIdNumber == null) return;
     setRows((prev) => [
       ...prev,
       {
         id: undefined,
-        line_id: lineIdNumber,
         sort_order: prev.length,
         sql_field: "",
         file_column: "",
@@ -93,16 +71,14 @@ export default function MappingPage() {
   };
 
   const handleSave = async () => {
-    if (lineIdNumber == null) return;
     setIsSaving(true);
     try {
       const normalized = rows.map((r, idx) => ({
         ...r,
-        line_id: lineIdNumber,
         sort_order: idx,
       }));
-      await invoke("save_mappings", { lineId: lineIdNumber, mappings: normalized });
-      await loadMappings(lineIdNumber);
+      await invoke("save_model_mappings", { formatName: selectedFormat, mappings: normalized });
+      await loadMappings(selectedFormat);
     } catch (e) {
       console.error(e);
     } finally {
@@ -141,10 +117,10 @@ export default function MappingPage() {
 
       <div className="max-w-md">
         <Select
-          items={lineOptions}
-          selectedKeys={new Set([selectedLineId])}
-          onSelectionChange={handleSelectLine}
-          placeholder="Sélectionner une ligne"
+          items={formatOptions}
+          selectedKeys={new Set([selectedFormat])}
+          onSelectionChange={handleSelectFormat}
+          placeholder="Sélectionner un modèle"
           variant="bordered"
           className="w-full"
           classNames={{
@@ -178,7 +154,7 @@ export default function MappingPage() {
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-tertiary)" }}>
-                  Aucun mapping pour cette ligne.
+                  Aucun mapping pour ce modèle.
                 </td>
               </tr>
             ) : (
