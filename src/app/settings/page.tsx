@@ -26,6 +26,7 @@ type UpdateStatus =
   | { state: "available"; version: string }
   | { state: "downloading"; version: string; progress?: number }
   | { state: "ready"; version: string }
+  | { state: "uptodate" }
   | { state: "error"; message: string };
 
 export default function Settings() {
@@ -67,7 +68,7 @@ export default function Settings() {
     try {
       const result = await check();
       if (!result) {
-        setUpdateStatus({ state: "idle" });
+        setUpdateStatus({ state: "uptodate" });
         return;
       }
       if (result.available) {
@@ -86,7 +87,7 @@ export default function Settings() {
 
         // Tauri will relaunch on install(); in case it doesn't, you can prompt restart
       } else {
-        setUpdateStatus({ state: "idle" });
+        setUpdateStatus({ state: "uptodate" });
       }
     } catch (err) {
       setUpdateStatus({ state: "error", message: String(err) });
@@ -168,7 +169,7 @@ export default function Settings() {
           </div>
           <button
             onClick={handleCheckUpdate}
-            disabled={updateStatus.state === "checking" || updateStatus.state === "downloading"}
+            disabled={updateStatus.state === "checking" || updateStatus.state === "downloading" || updateStatus.state === "uptodate"}
             className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
             style={{
               background: "var(--button-secondary-bg)",
@@ -187,6 +188,7 @@ export default function Settings() {
             {updateStatus.state === "available" && "Installer la mise à jour"}
             {updateStatus.state === "ready" && "Redémarrage..."}
             {updateStatus.state === "idle" && "Rechercher une mise à jour"}
+            {updateStatus.state === "uptodate" && "À jour"}
             {updateStatus.state === "error" && "Réessayer"}
           </button>
         </div>
@@ -205,6 +207,11 @@ export default function Settings() {
           {updateStatus.state === "ready" && (
             <div style={{ color: "var(--color-success)" }}>
               Mise à jour téléchargée. L'application va redémarrer pour appliquer la mise à jour.
+            </div>
+          )}
+          {updateStatus.state === "uptodate" && (
+            <div style={{ color: "var(--color-success)" }}>
+              Vous êtes déjà à jour.
             </div>
           )}
           {updateStatus.state === "error" && (

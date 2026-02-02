@@ -16,6 +16,7 @@ use encoding_rs::{UTF_8, WINDOWS_1252};
 use tiberius::{Client, AuthMethod, Config as SqlConfig, ToSql};
 use tokio_util::compat::TokioAsyncWriteCompatExt;
 use crate::commands::SqlServerConfig;
+use log::info;
 
 pub struct WatcherState {
     watchers: Mutex<HashMap<i64, WatcherHandle>>,
@@ -33,11 +34,40 @@ impl WatcherState {
     }
 }
 
-/// Build ordered parameter list following mappings order
-fn build_param_values(mappings: &[MappingRow], mapped: &HashMap<String, String>) -> Vec<String> {
-    mappings
-        .iter()
-        .map(|m| mapped.get(&m.sql_field).cloned().unwrap_or_default())
+fn parse_insert_columns(query: &str) -> Vec<String> {
+    let lower = query.to_lowercase();
+    let insert_pos = lower.find("insert");
+    if insert_pos.is_none() {
+        return Vec::new();
+    }
+
+    // Find the first '(' after INSERT ... and the ')' before VALUES
+    let open_paren = query[insert_pos.unwrap()..].find('(').map(|i| i + insert_pos.unwrap());
+    let values_pos = lower.find(") values");
+    if open_paren.is_none() || values_pos.is_none() {
+        return Vec::new();
+    }
+
+    let open = open_paren.unwrap();
+    let close = values_pos.unwrap();
+    if close <= open {
+        return Vec::new();
+    }
+
+    query[open + 1..close]
+        .split(',')
+        .map(|s| s.trim().trim_matches('[').trim_matches(']').trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+fn build_param_values_from_query(query: &str, mapped: &HashMap<String, String>) -> Vec<String> {
+    let cols = parse_insert_columns(query);
+    if cols.is_empty() {
+        return Vec::new();
+    }
+    cols.iter()
+        .map(|c| mapped.get(c).cloned().unwrap_or_default())
         .collect()
 }
 
@@ -98,8 +128,24 @@ impl StockProcessor {
             .await
             .map_err(|e| e.to_string())?;
 
+        let mut logged_debug = false;
         for mapped in rows {
-            let params = build_param_values(mappings, mapped);
+            let mut params = build_param_values_from_query(&query, mapped);
+            if params.is_empty() {
+                params = mappings
+                    .iter()
+                    .map(|m| mapped.get(&m.sql_field).cloned().unwrap_or_default())
+                    .collect();
+            }
+
+            if !logged_debug {
+                logged_debug = true;
+                let cols = parse_insert_columns(&query);
+                let fcy = mapped.get("FCY_0").cloned().unwrap_or_default();
+                info!("SQL params order: {:?}", cols);
+                info!("SQL mapped FCY_0: {}", fcy);
+            }
+
             // Keep owned strings alive while passing &dyn ToSql references
             let owned: Vec<String> = params;
             let params_refs: Vec<&dyn ToSql> = owned.iter().map(|s| s as &dyn ToSql).collect();
