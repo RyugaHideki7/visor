@@ -628,6 +628,13 @@ fn apply_transformation(value: String, transformation: &str) -> String {
                 return Local::now().format("%d/%m/%Y").to_string();
             }
 
+            // Handle long digit strings like YYYYMMDDHHMMSSmmm by taking the date part first
+            if v.chars().all(|c| c.is_ascii_digit()) && v.len() >= 8 {
+                if let Ok(dt) = chrono::NaiveDate::parse_from_str(&v[0..8], "%Y%m%d") {
+                    return dt.format("%d/%m/%Y").to_string();
+                }
+            }
+
             // Try multiple formats (same spirit as python)
             let formats = [
                 "%d/%m/%Y",
@@ -649,7 +656,13 @@ fn apply_transformation(value: String, transformation: &str) -> String {
         }
         "heure" => {
             let digits: String = value.chars().filter(|c| c.is_ascii_digit()).collect();
-            if digits.len() >= 6 {
+            if digits.len() >= 14 {
+                // Assume YYYYMMDDHHMMSS... take HHMMSS
+                digits[8..14].to_string()
+            } else if digits.len() >= 12 {
+                // YYYYMMDDHHMM.. take HHMM and add 00
+                format!("{}00", &digits[8..12])
+            } else if digits.len() >= 6 {
                 digits[..6].to_string()
             } else if digits.len() >= 4 {
                 format!("{}00", &digits[..4])
@@ -661,6 +674,24 @@ fn apply_transformation(value: String, transformation: &str) -> String {
             let v = value.trim();
             if v.is_empty() {
                 return Local::now().format("%d/%m/%Y %H:%M:%S").to_string();
+            }
+
+            // Handle pure digit long format like YYYYMMDDHHMMSSmmm
+            if v.chars().all(|c| c.is_ascii_digit()) {
+                if v.len() >= 14 {
+                    if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(&v[..14], "%Y%m%d%H%M%S") {
+                        return dt.format("%d/%m/%Y %H:%M:%S").to_string();
+                    }
+                }
+                if v.len() >= 8 {
+                    if let Ok(d) = chrono::NaiveDate::parse_from_str(&v[..8], "%Y%m%d") {
+                        let t_str = if v.len() >= 14 { &v[8..14] } else { "000000" };
+                        if let Ok(t) = chrono::NaiveTime::parse_from_str(t_str, "%H%M%S") {
+                            return chrono::NaiveDateTime::new(d, t).format("%d/%m/%Y %H:%M:%S").to_string();
+                        }
+                        return d.and_hms_opt(0, 0, 0).unwrap().format("%d/%m/%Y %H:%M:%S").to_string();
+                    }
+                }
             }
 
             let formats = [

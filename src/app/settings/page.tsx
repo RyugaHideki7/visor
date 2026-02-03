@@ -153,11 +153,6 @@ export default function Settings() {
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
           Configuration de l'application et connexion SQL Server
         </p>
-        {appVersion && (
-          <p className="text-xs mt-1" style={{ color: "var(--text-tertiary)" }}>
-            Version de l'application : {appVersion}
-          </p>
-        )}
       </div>
 
       {/* Mises à jour */}
@@ -413,7 +408,7 @@ export default function Settings() {
         <h3 className="font-semibold mb-2" style={{ color: "var(--text-primary)" }}>À propos</h3>
         <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
           Visor - Surveillance des lignes de production<br />
-          Version 1.0.0
+          Version {appVersion || "..."}
         </p>
       </div>
     </div>
