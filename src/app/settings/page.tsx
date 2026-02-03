@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faDatabase, faServer, faUser, faLock, faCheck, faSpinner, faArrowRotateRight, faCloudArrowDown } from "@fortawesome/free-solid-svg-icons";
 import { check } from "@tauri-apps/plugin-updater";
@@ -43,9 +44,11 @@ export default function Settings() {
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ state: "idle" });
+  const [appVersion, setAppVersion] = useState<string>("");
 
   useEffect(() => {
     loadConfig();
+    loadVersion();
   }, []);
 
   const loadConfig = async () => {
@@ -60,6 +63,15 @@ export default function Settings() {
       });
     } catch (error) {
       console.error("Failed to load SQL Server config:", error);
+    }
+  };
+
+  const loadVersion = async () => {
+    try {
+      const v = await getVersion();
+      setAppVersion(v);
+    } catch (error) {
+      console.error("Failed to load app version:", error);
     }
   };
 
@@ -141,6 +153,11 @@ export default function Settings() {
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
           Configuration de l'application et connexion SQL Server
         </p>
+        {appVersion && (
+          <p className="text-xs mt-1" style={{ color: "var(--text-tertiary)" }}>
+            Version de l'application : {appVersion}
+          </p>
+        )}
       </div>
 
       {/* Mises à jour */}
