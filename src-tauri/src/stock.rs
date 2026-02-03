@@ -657,6 +657,37 @@ fn apply_transformation(value: String, transformation: &str) -> String {
                 "000000".to_string()
             }
         }
+        "datetime" => {
+            let v = value.trim();
+            if v.is_empty() {
+                return Local::now().format("%d/%m/%Y %H:%M:%S").to_string();
+            }
+
+            let formats = [
+                "%d/%m/%Y %H:%M:%S",
+                "%d/%m/%Y %H:%M",
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d %H:%M",
+                "%Y%m%d %H%M%S",
+                "%Y%m%d%H%M%S",
+                "%d/%m/%Y",
+                "%Y-%m-%d",
+                "%Y%m%d",
+            ];
+
+            for fmt in formats {
+                if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(v, fmt) {
+                    return dt.format("%d/%m/%Y %H:%M:%S").to_string();
+                }
+                if let Ok(d) = chrono::NaiveDate::parse_from_str(v, fmt) {
+                    let dt = d.and_hms_opt(0, 0, 0)
+                        .unwrap_or_else(|| chrono::NaiveDateTime::new(d, chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap()));
+                    return dt.format("%d/%m/%Y %H:%M:%S").to_string();
+                }
+            }
+
+            Local::now().format("%d/%m/%Y %H:%M:%S").to_string()
+        }
         "decimal" => {
             let cleaned = value.replace(',', ".");
             let cleaned = cleaned

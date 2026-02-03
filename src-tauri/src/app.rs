@@ -94,6 +94,7 @@ pub fn run_app() {
         crate::commands::save_mappings,
         crate::commands::get_model_mappings,
         crate::commands::save_model_mappings,
+        crate::commands::reset_model_mappings,
         crate::commands::get_production_data,
         crate::commands::get_sql_server_config,
         crate::commands::save_sql_server_config,

@@ -174,7 +174,7 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
             (
                 2,
                 "YHEURE_0",
-                Some("2"),
+                Some("1"),
                 None,
                 Some("heure"),
                 Some("Heure déclaration"),
@@ -182,16 +182,16 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
             (
                 3,
                 "ITMREF_0",
-                Some("3"),
+                Some("5"),
                 None,
                 None,
                 Some("Référence article"),
             ),
-            (4, "LOT_0", Some("4"), None, None, Some("Numéro de lot")),
+            (4, "LOT_0", Some("7"), None, None, Some("Numéro de lot")),
             (
                 5,
                 "QTY_0",
-                Some("5"),
+                Some("9"),
                 None,
                 Some("decimal"),
                 Some("Quantité"),
@@ -199,7 +199,7 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
             (
                 6,
                 "YDATDL_0",
-                Some("7"),
+                Some("8"),
                 None,
                 Some("date"),
                 Some("Date livraison"),
@@ -207,7 +207,7 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
             (
                 7,
                 "YNLIGN_0",
-                Some("8"),
+                Some("12"),
                 None,
                 None,
                 Some("Numéro de ligne"),
@@ -215,16 +215,16 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
             (
                 8,
                 "MFGNUM_0",
-                Some("13"),
+                Some("18"),
                 None,
                 None,
                 Some("Numéro de fabrication"),
             ),
-            (9, "YCODEPOT_0", Some("14"), None, None, Some("Code dépôt")),
+            (9, "YCODEPOT_0", Some("4"), None, None, Some("Code dépôt")),
             (
                 10,
                 "YPALETTE_0",
-                Some("15"),
+                Some("16"),
                 None,
                 Some("split_before_plus"),
                 Some("Partie avant +"),
@@ -232,7 +232,7 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
             (
                 11,
                 "YINTERCAL_0",
-                Some("15"),
+                Some("17"),
                 None,
                 Some("split_after_plus"),
                 Some("Partie après +"),
@@ -272,22 +272,13 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
             (
                 16,
                 "CREDATTIM_0",
-                Some("1-2"),
+                Some("1"),
                 None,
-                Some("datetime_combine"),
-                Some("Date/heure création (YDATE + YHEURE)"),
+                Some("datetime"),
+                Some("Date/heure création"),
             ),
         ],
     )
-    .await?;
-
-    // Backfill existing ATEIS rows to use date+time (YDATE/YHEURE) instead of current datetime
-    sqlx::query(
-        "UPDATE model_mappings
-         SET file_column = '1-2', transformation = 'datetime_combine'
-         WHERE format_name = 'ATEIS' AND sql_field = 'CREDATTIM_0'",
-    )
-    .execute(&pool)
     .await?;
 
     seed_model(
@@ -518,23 +509,12 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
     .execute(&pool)
     .await?;
 
-    // Always overwrite to ensure template stays in sync with code
-    sqlx::query("UPDATE sql_queries SET query_template = ? WHERE format_name = 'ATEIS'")
-        .bind(default_ateis_query)
-        .execute(&pool)
-        .await?;
-
     sqlx::query(
         "INSERT OR IGNORE INTO sql_queries (format_name, query_template) VALUES ('LOGITRON', ?)",
     )
     .bind(default_logitron_query)
     .execute(&pool)
     .await?;
-
-    sqlx::query("UPDATE sql_queries SET query_template = ? WHERE format_name = 'LOGITRON'")
-        .bind(default_logitron_query)
-        .execute(&pool)
-        .await?;
 
     Ok(pool)
 }

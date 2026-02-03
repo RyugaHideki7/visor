@@ -86,6 +86,19 @@ export default function MappingPage() {
     }
   };
 
+  const handleReset = async () => {
+    setIsSaving(true);
+    try {
+      await invoke("reset_model_mappings", { formatName: selectedFormat });
+      await loadMappings(selectedFormat);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const newLocal = "border-(--border-default) text-(--text-primary) hover:bg-(--bg-hover)";
   return (
     <div className="p-8 flex flex-col gap-6">
       <div className="flex justify-between items-start gap-6">
@@ -100,15 +113,22 @@ export default function MappingPage() {
             onPress={handleAddRow}
             variant="bordered"
             startContent={<FontAwesomeIcon icon={faPlus} />}
-            className="border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+            className="border-(--border-default) text-(--text-primary) hover:bg-(--bg-hover)"
           >
             Ajouter
+          </Button>
+          <Button
+            onPress={handleReset}
+            variant="bordered"
+            className={newLocal}
+          >
+            Réinitialiser
           </Button>
           <Button
             onPress={handleSave}
             isLoading={isSaving}
             color="primary"
-            className="bg-[var(--button-primary-bg)] text-white hover:bg-[var(--button-primary-hover)]"
+            className="bg-(--button-primary-bg) text-white hover:bg-(--button-primary-hover)"
           >
             Sauvegarder
           </Button>
@@ -131,7 +151,7 @@ export default function MappingPage() {
           }}
         >
           {(item) => (
-            <SelectItem key={item.key} textValue={item.name} className="text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">
+            <SelectItem key={item.key} textValue={item.name} className="text-(--text-primary) hover:bg-(--bg-hover)">
               {item.name}
             </SelectItem>
           )}
@@ -236,7 +256,7 @@ export default function MappingPage() {
                       size="sm"
                       variant="light"
                       onPress={() => handleDeleteRow(idx)}
-                      className="text-[var(--text-tertiary)] hover:bg-[var(--color-error-bg)] hover:text-[var(--color-error)]"
+                      className="text-(--text-tertiary) hover:bg-(--color-error-bg) hover:text-(--color-error)"
                       title="Supprimer"
                     >
                       <FontAwesomeIcon icon={faTrash} />

@@ -164,6 +164,17 @@ pub async fn save_model_mappings(state: State<'_, DbState>, format_name: String,
 }
 
 #[tauri::command]
+pub async fn reset_model_mappings(state: State<'_, DbState>, format_name: String) -> Result<(), String> {
+    let fmt = format_name.to_uppercase();
+    let defaults = match fmt.as_str() {
+        "ATEIS" => get_ateis_default_mappings(),
+        "LOGITRON" => get_logitron_default_mappings(),
+        _ => get_ateis_default_mappings(),
+    };
+    save_model_mappings_to_db(&state.pool, &fmt, defaults).await
+}
+
+#[tauri::command]
 pub async fn get_lines(state: State<'_, DbState>) -> Result<Vec<Line>, String> {
     let lines = sqlx::query_as::<_, Line>(
         "SELECT id, name, path, prefix, interval_check, interval_alert, archived_path, rejected_path, active, 
@@ -714,21 +725,21 @@ fn get_ateis_default_mappings() -> Vec<MappingRow> {
     vec![
         MappingRow { id: None, line_id: 0, sort_order: 0, sql_field: "YSSCC_0".to_string(), file_column: Some("0".to_string()), parameter: None, transformation: None, description: Some("Code SCC".to_string()) },
         MappingRow { id: None, line_id: 0, sort_order: 1, sql_field: "YDATE_0".to_string(), file_column: Some("1".to_string()), parameter: None, transformation: Some("date".to_string()), description: Some("Date déclaration".to_string()) },
-        MappingRow { id: None, line_id: 0, sort_order: 2, sql_field: "YHEURE_0".to_string(), file_column: Some("2".to_string()), parameter: None, transformation: Some("heure".to_string()), description: Some("Heure déclaration".to_string()) },
-        MappingRow { id: None, line_id: 0, sort_order: 3, sql_field: "ITMREF_0".to_string(), file_column: Some("3".to_string()), parameter: None, transformation: None, description: Some("Référence article".to_string()) },
-        MappingRow { id: None, line_id: 0, sort_order: 4, sql_field: "LOT_0".to_string(), file_column: Some("4".to_string()), parameter: None, transformation: None, description: Some("Numéro de lot".to_string()) },
-        MappingRow { id: None, line_id: 0, sort_order: 5, sql_field: "QTY_0".to_string(), file_column: Some("5".to_string()), parameter: None, transformation: Some("decimal".to_string()), description: Some("Quantité".to_string()) },
-        MappingRow { id: None, line_id: 0, sort_order: 6, sql_field: "YDATDL_0".to_string(), file_column: Some("7".to_string()), parameter: None, transformation: Some("date".to_string()), description: Some("Date livraison".to_string()) },
-        MappingRow { id: None, line_id: 0, sort_order: 7, sql_field: "YNLIGN_0".to_string(), file_column: Some("8".to_string()), parameter: None, transformation: None, description: Some("Numéro de ligne".to_string()) },
-        MappingRow { id: None, line_id: 0, sort_order: 8, sql_field: "MFGNUM_0".to_string(), file_column: Some("13".to_string()), parameter: None, transformation: None, description: Some("Numéro de fabrication".to_string()) },
-        MappingRow { id: None, line_id: 0, sort_order: 9, sql_field: "YCODEPOT_0".to_string(), file_column: Some("14".to_string()), parameter: None, transformation: None, description: Some("Code dépôt".to_string()) },
-        MappingRow { id: None, line_id: 0, sort_order: 10, sql_field: "YPALETTE_0".to_string(), file_column: Some("15".to_string()), parameter: None, transformation: Some("split_before_plus".to_string()), description: Some("Partie avant +".to_string()) },
-        MappingRow { id: None, line_id: 0, sort_order: 11, sql_field: "YINTERCAL_0".to_string(), file_column: Some("15".to_string()), parameter: None, transformation: Some("split_after_plus".to_string()), description: Some("Partie après +".to_string()) },
+        MappingRow { id: None, line_id: 0, sort_order: 2, sql_field: "YHEURE_0".to_string(), file_column: Some("1".to_string()), parameter: None, transformation: Some("heure".to_string()), description: Some("Heure déclaration".to_string()) },
+        MappingRow { id: None, line_id: 0, sort_order: 3, sql_field: "ITMREF_0".to_string(), file_column: Some("5".to_string()), parameter: None, transformation: None, description: Some("Référence article".to_string()) },
+        MappingRow { id: None, line_id: 0, sort_order: 4, sql_field: "LOT_0".to_string(), file_column: Some("7".to_string()), parameter: None, transformation: None, description: Some("Numéro de lot".to_string()) },
+        MappingRow { id: None, line_id: 0, sort_order: 5, sql_field: "QTY_0".to_string(), file_column: Some("9".to_string()), parameter: None, transformation: Some("decimal".to_string()), description: Some("Quantité".to_string()) },
+        MappingRow { id: None, line_id: 0, sort_order: 6, sql_field: "YDATDL_0".to_string(), file_column: Some("8".to_string()), parameter: None, transformation: Some("date".to_string()), description: Some("Date livraison".to_string()) },
+        MappingRow { id: None, line_id: 0, sort_order: 7, sql_field: "YNLIGN_0".to_string(), file_column: Some("12".to_string()), parameter: None, transformation: None, description: Some("Numéro de ligne".to_string()) },
+        MappingRow { id: None, line_id: 0, sort_order: 8, sql_field: "MFGNUM_0".to_string(), file_column: Some("18".to_string()), parameter: None, transformation: None, description: Some("Numéro de fabrication".to_string()) },
+        MappingRow { id: None, line_id: 0, sort_order: 9, sql_field: "YCODEPOT_0".to_string(), file_column: Some("4".to_string()), parameter: None, transformation: None, description: Some("Code dépôt".to_string()) },
+        MappingRow { id: None, line_id: 0, sort_order: 10, sql_field: "YPALETTE_0".to_string(), file_column: Some("16".to_string()), parameter: None, transformation: Some("split_before_plus".to_string()), description: Some("Partie avant +".to_string()) },
+        MappingRow { id: None, line_id: 0, sort_order: 11, sql_field: "YINTERCAL_0".to_string(), file_column: Some("17".to_string()), parameter: None, transformation: Some("split_after_plus".to_string()), description: Some("Partie après +".to_string()) },
         MappingRow { id: None, line_id: 0, sort_order: 12, sql_field: "FCY_0".to_string(), file_column: None, parameter: Some("site".to_string()), transformation: None, description: Some("Site de production".to_string()) },
         MappingRow { id: None, line_id: 0, sort_order: 13, sql_field: "UOM_0".to_string(), file_column: None, parameter: Some("unite".to_string()), transformation: None, description: Some("Unité de mesure".to_string()) },
         MappingRow { id: None, line_id: 0, sort_order: 14, sql_field: "YFLGDEC_0".to_string(), file_column: None, parameter: Some("flag_dec".to_string()), transformation: Some("tinyint".to_string()), description: Some("Flag déclaration".to_string()) },
         MappingRow { id: None, line_id: 0, sort_order: 15, sql_field: "CREUSR_0".to_string(), file_column: None, parameter: Some("code_ligne".to_string()), transformation: None, description: Some("Utilisateur création".to_string()) },
-        MappingRow { id: None, line_id: 0, sort_order: 16, sql_field: "CREDATTIM_0".to_string(), file_column: None, parameter: None, transformation: Some("current_datetime".to_string()), description: Some("Date/heure création".to_string()) },
+        MappingRow { id: None, line_id: 0, sort_order: 16, sql_field: "CREDATTIM_0".to_string(), file_column: Some("1".to_string()), parameter: None, transformation: Some("datetime".to_string()), description: Some("Date/heure création".to_string()) },
     ]
 }
 
