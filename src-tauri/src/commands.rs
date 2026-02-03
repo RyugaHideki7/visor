@@ -74,6 +74,7 @@ pub struct DashboardLine {
     pub last_processed: Option<String>,
     pub total_processed: i64,
     pub status: String,
+    pub site: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -463,6 +464,7 @@ pub async fn get_dashboard_snapshot(state: State<'_, DbState>) -> Result<Vec<Das
             last_processed,
             total_processed,
             status,
+            site: line.site,
         });
     }
 

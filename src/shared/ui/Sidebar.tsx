@@ -6,7 +6,7 @@ import { faChevronDown, faIndustry } from "@fortawesome/free-solid-svg-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SIDEBAR_ITEMS } from "@/shared/constants/sidebar";
 import { useSidebar } from "@/shared/contexts/sidebar";
 import { useTheme } from "@/shared/contexts/theme";
@@ -18,6 +18,12 @@ export function Sidebar() {
   const prefersReducedMotion = useReducedMotion();
   const pathname = usePathname();
   const [isProductionOpen, setIsProductionOpen] = useState(true);
+
+  useEffect(() => {
+    if (!isExpanded) {
+      setIsProductionOpen(false);
+    }
+  }, [isExpanded]);
 
   // Group production-related pages: lines, mapping, sql-queries, journaux
   const productionKeys = useMemo(() => new Set(["lines", "mapping", "sql-queries", "logs"]), []);
@@ -104,7 +110,7 @@ export function Sidebar() {
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "space-between",
+                      justifyContent: isExpanded ? "space-between" : "center",
                       gap: 8,
                       padding: isExpanded ? "10px 12px" : "10px",
                       borderRadius: 8,
@@ -158,7 +164,7 @@ export function Sidebar() {
                   </button>
 
                   <AnimatePresence initial={false}>
-                    {isProductionOpen && (
+                    {isExpanded && isProductionOpen && (
                       <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: "auto", opacity: 1 }}

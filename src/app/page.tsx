@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faExclamationTriangle } from "@fortawesome/free-solid-svg-icons";
 import { invoke } from "@tauri-apps/api/core";
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Pagination } from "@heroui/react";
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Pagination, Tabs, Tab } from "@heroui/react";
 
 interface LineStatus {
     id: number;
@@ -14,6 +14,7 @@ interface LineStatus {
     last_processed?: string;
     total_processed: number;
     status: "MARCHE" | "ALERTE" | "ARRET" | "ERREUR";
+    site?: string | null;
 }
 
 const statusColorMap: Record<string, "success" | "warning" | "default" | "danger"> = {
@@ -34,6 +35,7 @@ export default function Dashboard() {
     const [lineStatuses, setLineStatuses] = useState<LineStatus[]>([]);
     const [page, setPage] = useState(1);
     const rowsPerPage = 10;
+    const [siteFilter, setSiteFilter] = useState<string>("ALL");
 
     const fetchStatus = async () => {
         try {
@@ -64,11 +66,32 @@ export default function Dashboard() {
         };
     }, []);
 
-    const totalPages = Math.max(1, Math.ceil(lineStatuses.length / rowsPerPage));
+    const sites = useMemo(() => {
+        const unique = Array.from(
+            new Set(
+                lineStatuses
+                    .map((l) => l.site?.trim())
+                    .filter((s): s is string => Boolean(s && s.length > 0))
+            )
+        );
+        unique.sort((a, b) => a.localeCompare(b));
+        return ["ALL", ...unique];
+    }, [lineStatuses]);
+
+    const filtered = useMemo(() => {
+        if (siteFilter === "ALL") return lineStatuses;
+        return lineStatuses.filter((l) => (l.site || "").trim() === siteFilter);
+    }, [lineStatuses, siteFilter]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [siteFilter]);
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
     const paginatedItems = useMemo(() => {
         const start = (page - 1) * rowsPerPage;
-        return lineStatuses.slice(start, start + rowsPerPage);
-    }, [lineStatuses, page]);
+        return filtered.slice(start, start + rowsPerPage);
+    }, [filtered, page]);
 
     return (
         <div className="p-8 flex flex-col gap-8">
@@ -76,6 +99,18 @@ export default function Dashboard() {
                 <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Tableau de bord</h1>
                 <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Statut en temps réel des lignes de production</p>
             </div>
+
+            <Tabs
+                aria-label="Filtrer par site"
+                selectedKey={siteFilter}
+                onSelectionChange={(k) => setSiteFilter(String(k))}
+                variant="underlined"
+                color="primary"
+            >
+                {sites.map((site) => (
+                    <Tab key={site} title={site === "ALL" ? "Tous les sites" : site} />
+                ))}
+            </Tabs>
 
             <div className="bg-(--bg-secondary) border border-(--border-default) rounded-xl p-4">
                 <Table
