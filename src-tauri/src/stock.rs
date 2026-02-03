@@ -2,13 +2,13 @@ use notify::{Config, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::io::Write;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 use sqlx::{Pool, Sqlite, Row};
 use tauri::AppHandle;
 use tauri::Manager;
 use chrono::Local;
 use std::collections::HashMap;
-use std::sync::{mpsc, Mutex};
+use std::sync::{mpsc, Mutex, Arc};
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::FromRow;
@@ -24,6 +24,7 @@ pub struct WatcherState {
 
 struct WatcherHandle {
     stop_tx: mpsc::Sender<()>,
+    processed_files: Arc<Mutex<HashMap<String, SystemTime>>>,
 }
 
 impl WatcherState {
@@ -413,6 +414,11 @@ impl StockProcessor {
     }
 
     pub async fn process_file(&self, line_id: i64, path: PathBuf, prefix: String, archived_path: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+        // Check if file still exists (may have been processed already)
+        if !path.exists() {
+            return Ok(());
+        }
+
         let filename = path.file_name().unwrap().to_str().unwrap().to_string();
         
         // Basic check for prefix and allowed extensions (TMP, CSV, TXT)
@@ -447,6 +453,18 @@ impl StockProcessor {
                 return Err(e.into());
             }
         };
+
+        // Move file to temporary processing location to prevent duplicate processing
+        let temp_dir = std::env::temp_dir();
+        let temp_filename = format!("visor_processing_{}_{}", line_id, filename);
+        let temp_path = temp_dir.join(&temp_filename);
+        
+        if let Err(e) = fs::rename(&path, &temp_path) {
+            let msg = format!("Impossible de déplacer le fichier {} pour traitement: {}", filename, e);
+            DiskLogger::log_ligne(&line_name, &log_path, &msg, "ERROR");
+            self.add_db_log(line_id, "ERROR", "FileProcessor", &msg, None).await;
+            return Err(e.into());
+        }
 
         let mut rdr = csv::ReaderBuilder::new()
             .delimiter(b';')
@@ -546,48 +564,64 @@ impl StockProcessor {
         // Update statistics
         self.update_line_stats(line_id, !had_error).await;
 
-        // Log result
+        // Log result and move file to final destination
         if had_error {
             let msg = format!("Échec traitement {}: {}", filename, error_msg.as_deref().unwrap_or("unknown"));
             DiskLogger::log_ligne(&line_name, &log_path, &msg, "ERROR");
             self.add_db_log(line_id, "ERROR", "FileProcessor", &msg, None).await;
 
-            // Move to rejected folder if configured
+            // Move to rejected folder if configured, otherwise delete temp file
             if let Some(reject_dir) = line_config.as_ref().and_then(|c| c.rejected_path.clone()) {
                 let reject_path = Path::new(&reject_dir);
                 if !reject_path.exists() {
                     let _ = fs::create_dir_all(reject_path);
                 }
 
-                let new_filename = path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("rejected.tmp")
-                    .to_string();
+                let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
+                let new_filename = format!("{}_{}{}", 
+                    Path::new(&filename).file_stem().unwrap().to_str().unwrap(),
+                    timestamp,
+                    Path::new(&filename).extension().unwrap_or_default().to_str().map(|s| format!(".{}", s)).unwrap_or_default()
+                );
                 let dest_path = reject_path.join(new_filename);
-                let _ = fs::rename(&path, dest_path);
+                
+                if let Err(e) = fs::rename(&temp_path, &dest_path) {
+                    eprintln!("Failed to move to rejected folder: {}", e);
+                    let _ = fs::remove_file(&temp_path);
+                }
+            } else {
+                let _ = fs::remove_file(&temp_path);
             }
         } else {
             let msg = format!("Fichier {} traité avec succès - {} enregistrements", filename, row_count);
             DiskLogger::log_ligne(&line_name, &log_path, &msg, "INFO");
             self.add_db_log(line_id, "SUCCESS", "FileProcessor", &msg, None).await;
 
-            // Archive only if processing succeeded
+            // Archive if configured, otherwise delete temp file
             if let Some(archive_dir) = archived_path {
                 let archive_dir_path = Path::new(&archive_dir);
                 if !archive_dir_path.exists() {
-                    fs::create_dir_all(archive_dir_path)?;
+                    if let Err(e) = fs::create_dir_all(archive_dir_path) {
+                        eprintln!("Failed to create archive directory: {}", e);
+                        let _ = fs::remove_file(&temp_path);
+                        return Ok(());
+                    }
                 }
                 
                 let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
                 let new_filename = format!("{}_{}{}", 
-                    path.file_stem().unwrap().to_str().unwrap(),
+                    Path::new(&filename).file_stem().unwrap().to_str().unwrap(),
                     timestamp,
-                    path.extension().unwrap_or_default().to_str().map(|s| format!(".{}", s)).unwrap_or_default()
+                    Path::new(&filename).extension().unwrap_or_default().to_str().map(|s| format!(".{}", s)).unwrap_or_default()
                 );
                 
                 let dest_path = archive_dir_path.join(new_filename);
-                fs::rename(&path, dest_path)?;
+                if let Err(e) = fs::rename(&temp_path, &dest_path) {
+                    eprintln!("Failed to archive file: {}", e);
+                    let _ = fs::remove_file(&temp_path);
+                }
+            } else {
+                let _ = fs::remove_file(&temp_path);
             }
         }
 
@@ -891,10 +925,11 @@ pub fn start_watcher(app_handle: AppHandle, line_id: i64, path: String, prefix: 
     let processor = StockProcessor::new(pool);
 
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
+    let processed_files = Arc::new(Mutex::new(HashMap::<String, SystemTime>::new()));
 
     {
         let mut watchers = state.watchers.lock().expect("watchers mutex poisoned");
-        watchers.insert(line_id, WatcherHandle { stop_tx });
+        watchers.insert(line_id, WatcherHandle { stop_tx, processed_files: processed_files.clone() });
     }
     
     std::thread::spawn(move || {
@@ -910,6 +945,14 @@ pub fn start_watcher(app_handle: AppHandle, line_id: i64, path: String, prefix: 
 
         // Process already-existing files at startup (parity with Python).
         for p in scan_existing_files(watch_path, &prefix) {
+            let file_key = p.to_string_lossy().to_string();
+            let mut processed = processed_files.lock().expect("processed_files mutex poisoned");
+            if processed.contains_key(&file_key) {
+                continue;
+            }
+            processed.insert(file_key, SystemTime::now());
+            drop(processed);
+
             let pr = processor.pool.clone();
             let proc = StockProcessor::new(pr);
             let pref = prefix.clone();
@@ -932,7 +975,24 @@ pub fn start_watcher(app_handle: AppHandle, line_id: i64, path: String, prefix: 
 
             // Fallback poll to catch files when FS events are missed (e.g., network shares).
             if last_scan.elapsed() >= Duration::from_secs(5) {
+                // Clean up old entries (older than 60 seconds)
+                {
+                    let mut processed = processed_files.lock().expect("processed_files mutex poisoned");
+                    let now = SystemTime::now();
+                    processed.retain(|_, time| {
+                        now.duration_since(*time).map(|d| d.as_secs() < 60).unwrap_or(false)
+                    });
+                }
+
                 for p in scan_existing_files(watch_path, &prefix) {
+                    let file_key = p.to_string_lossy().to_string();
+                    let mut processed = processed_files.lock().expect("processed_files mutex poisoned");
+                    if processed.contains_key(&file_key) {
+                        continue;
+                    }
+                    processed.insert(file_key, SystemTime::now());
+                    drop(processed);
+
                     let pr = processor.pool.clone();
                     let proc = StockProcessor::new(pr);
                     let pref = prefix.clone();
@@ -959,6 +1019,14 @@ pub fn start_watcher(app_handle: AppHandle, line_id: i64, path: String, prefix: 
                 Ok(event) => {
                     if matches!(event.kind, notify::EventKind::Create(_) | notify::EventKind::Modify(_)) {
                         for path_buf in event.paths {
+                            let file_key = path_buf.to_string_lossy().to_string();
+                            let mut processed = processed_files.lock().expect("processed_files mutex poisoned");
+                            if processed.contains_key(&file_key) {
+                                continue;
+                            }
+                            processed.insert(file_key, SystemTime::now());
+                            drop(processed);
+
                             let p = path_buf.clone();
                             let pr = processor.pool.clone();
                             let proc = StockProcessor::new(pr);

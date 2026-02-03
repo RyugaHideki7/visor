@@ -87,17 +87,19 @@ export default function Settings() {
         const version = result.version ?? "";
         setUpdateStatus({ state: "available", version });
 
+        const confirmed = window.confirm(`Installer la mise à jour ${version} ?`);
+        if (!confirmed) {
+          return;
+        }
+
         await result.downloadAndInstall((event) => {
           if (event.event === "Progress") {
             setUpdateStatus({ state: "downloading", version });
           }
         });
 
-        // If download succeeded, finalize and restart
         await result.install();
         setUpdateStatus({ state: "ready", version });
-
-        // Tauri will relaunch on install(); in case it doesn't, you can prompt restart
       } else {
         setUpdateStatus({ state: "uptodate" });
       }
@@ -181,7 +183,7 @@ export default function Settings() {
           </div>
           <button
             onClick={handleCheckUpdate}
-            disabled={updateStatus.state === "checking" || updateStatus.state === "downloading" || updateStatus.state === "uptodate"}
+            disabled={updateStatus.state === "checking" || updateStatus.state === "downloading"}
             className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
             style={{
               background: "var(--button-secondary-bg)",
