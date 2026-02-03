@@ -413,220 +413,238 @@ impl StockProcessor {
         .await;
     }
 
-    pub async fn process_file(&self, line_id: i64, path: PathBuf, prefix: String, archived_path: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
-        // Check if file still exists (may have been processed already)
-        if !path.exists() {
-            return Ok(());
+pub async fn process_file(&self, line_id: i64, path: PathBuf, prefix: String, archived_path: Option<String>) -> Result<(), Box<dyn std::error::Error>> { 
+    // Check if file still exists (may have been processed already)
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let filename = path.file_name().unwrap().to_str().unwrap().to_string();
+    
+    // Basic check for prefix and allowed extensions (TMP, CSV, TXT)
+    let upper = filename.to_uppercase();
+    let allowed_ext = upper.ends_with(".TMP") || upper.ends_with(".CSV") || upper.ends_with(".TXT");
+    if !upper.contains(&prefix.to_uppercase()) || !allowed_ext {
+        return Ok(());
+    }
+
+    // Load line config for parameters and logging
+    let line_config = self.load_line_config(line_id).await;
+    let line_name = line_config.as_ref().map(|c| c.name.clone()).unwrap_or_else(|| format!("line_{}", line_id));
+    let log_path = line_config.as_ref().and_then(|c| c.log_path.clone());
+
+    // Wait a bit to ensure file is completely written (like the Python time.sleep(1))
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // Check if file is locked
+    if is_file_locked(&path) {
+        DiskLogger::log_ligne(&line_name, &log_path, &format!("Fichier {} en cours d'utilisation", filename), "WARNING");
+        return Ok(());
+    }
+
+    // Read file with encoding fallback
+    let content = match read_file_with_encoding_fallback(&path) {
+        Ok(c) => c,
+        Err(e) => {
+            let msg = format!("Erreur lecture fichier {}: {}", filename, e);
+            DiskLogger::log_ligne(&line_name, &log_path, &msg, "ERROR");
+            self.add_db_log(line_id, "ERROR", "FileProcessor", &msg, None).await;
+            self.update_line_stats(line_id, false).await;
+            return Err(e.into());
         }
+    };
 
-        let filename = path.file_name().unwrap().to_str().unwrap().to_string();
-        
-        // Basic check for prefix and allowed extensions (TMP, CSV, TXT)
-        let upper = filename.to_uppercase();
-        let allowed_ext = upper.ends_with(".TMP") || upper.ends_with(".CSV") || upper.ends_with(".TXT");
-        if !upper.contains(&prefix.to_uppercase()) || !allowed_ext {
-            return Ok(());
-        }
+    // FIXED: Use same-filesystem temp directory (parent directory of source file)
+    let source_parent = path.parent().unwrap_or_else(|| Path::new(".")); // Fallback to current dir
+    let temp_subdir = source_parent.join("visor_temp");
+    
+    // Create temp subdirectory if it doesn't exist
+    if let Err(e) = tokio::fs::create_dir_all(&temp_subdir).await {
+        let msg = format!("Impossible de créer dossier temp {}: {}", temp_subdir.display(), e);
+        DiskLogger::log_ligne(&line_name, &log_path, &msg, "ERROR");
+        self.add_db_log(line_id, "ERROR", "FileProcessor", &msg, None).await;
+        return Err(e.into());
+    }
 
-        // Load line config for parameters and logging
-        let line_config = self.load_line_config(line_id).await;
-        let line_name = line_config.as_ref().map(|c| c.name.clone()).unwrap_or_else(|| format!("line_{}", line_id));
-        let log_path = line_config.as_ref().and_then(|c| c.log_path.clone());
+    let temp_filename = format!("visor_processing_{}_{}", line_id, filename);
+    let temp_path = temp_subdir.join(&temp_filename);
+    
+    // Now safe to rename - same filesystem guaranteed
+    if let Err(e) = fs::rename(&path, &temp_path) {
+        let msg = format!("Impossible de déplacer le fichier {} vers {}: {}", filename, temp_path.display(), e);
+        DiskLogger::log_ligne(&line_name, &log_path, &msg, "ERROR");
+        self.add_db_log(line_id, "ERROR", "FileProcessor", &msg, None).await;
+        // Cleanup temp dir if empty
+        let _ = fs::remove_dir_all(&temp_subdir);
+        return Err(e.into());
+    }
 
-        // Wait a bit to ensure file is completely written (like the Python time.sleep(1))
-        tokio::time::sleep(Duration::from_millis(500)).await;
+    let mut rdr = csv::ReaderBuilder::new()
+        .delimiter(b';')
+        .has_headers(false)
+        .flexible(true)
+        .from_reader(content.as_bytes());
 
-        // Check if file is locked
-        if is_file_locked(&path) {
-            DiskLogger::log_ligne(&line_name, &log_path, &format!("Fichier {} en cours d'utilisation", filename), "WARNING");
-            return Ok(());
-        }
+    // Load mappings for this line (global model mappings by file_format)
+    let format_name = line_config
+        .as_ref()
+        .and_then(|l| l.file_format.clone())
+        .unwrap_or_else(|| "ATEIS".to_string());
 
-        // Read file with encoding fallback
-        let content = match read_file_with_encoding_fallback(&path) {
-            Ok(c) => c,
+    let mappings = sqlx::query_as::<_, MappingRow>(
+        "SELECT id, 0 as line_id, sort_order, sql_field, file_column, parameter, transformation, description \
+         FROM model_mappings WHERE format_name = ? ORDER BY sort_order ASC, id ASC",
+    )
+    .bind(format_name.to_uppercase())
+    .fetch_all(&self.pool)
+    .await
+    .unwrap_or_default();
+
+    let mut row_count = 0;
+    let mut first_mapped: Option<serde_json::Value> = None;
+    let mut had_error = false;
+    let mut error_msg: Option<String> = None;
+    let mut all_mapped_values: Vec<HashMap<String, String>> = Vec::new();
+
+    if mappings.is_empty() {
+        had_error = true;
+        error_msg = Some(format!(
+            "Aucun mapping configuré pour le modèle {}",
+            format_name.to_uppercase()
+        ));
+    }
+
+    for result in rdr.records() {
+        let record = match result {
+            Ok(r) => r,
             Err(e) => {
-                let msg = format!("Erreur lecture fichier {}: {}", filename, e);
-                DiskLogger::log_ligne(&line_name, &log_path, &msg, "ERROR");
-                self.add_db_log(line_id, "ERROR", "FileProcessor", &msg, None).await;
-                self.update_line_stats(line_id, false).await;
-                return Err(e.into());
+                had_error = true;
+                error_msg = Some(e.to_string());
+                break;
             }
         };
 
-        // Move file to temporary processing location to prevent duplicate processing
-        let temp_dir = std::env::temp_dir();
-        let temp_filename = format!("visor_processing_{}_{}", line_id, filename);
-        let temp_path = temp_dir.join(&temp_filename);
-        
-        if let Err(e) = fs::rename(&path, &temp_path) {
-            let msg = format!("Impossible de déplacer le fichier {} pour traitement: {}", filename, e);
-            DiskLogger::log_ligne(&line_name, &log_path, &msg, "ERROR");
-            self.add_db_log(line_id, "ERROR", "FileProcessor", &msg, None).await;
-            return Err(e.into());
+        row_count += 1;
+
+        // Map record with line config for parameter resolution
+        let mapped = map_record_with_mappings_and_params(&record, &mappings, &line_config);
+        if first_mapped.is_none() {
+            first_mapped = Some(json!(mapped));
         }
+        all_mapped_values.push(mapped);
+    }
 
-        let mut rdr = csv::ReaderBuilder::new()
-            .delimiter(b';')
-            .has_headers(false)
-            .flexible(true)
-            .from_reader(content.as_bytes());
+    // If no rows or error, mark as error
+    if row_count == 0 {
+        had_error = true;
+        error_msg = Some("Fichier vide ou format invalide".to_string());
+    }
 
-        // Load mappings for this line (global model mappings by file_format)
-        let format_name = line_config
-            .as_ref()
-            .and_then(|l| l.file_format.clone())
-            .unwrap_or_else(|| "ATEIS".to_string());
-
-        let mappings = sqlx::query_as::<_, MappingRow>(
-            "SELECT id, 0 as line_id, sort_order, sql_field, file_column, parameter, transformation, description \
-             FROM model_mappings WHERE format_name = ? ORDER BY sort_order ASC, id ASC",
-        )
-        .bind(format_name.to_uppercase())
-        .fetch_all(&self.pool)
-        .await
-        .unwrap_or_default();
-
-        let mut row_count = 0;
-        let mut first_mapped: Option<serde_json::Value> = None;
-        let mut had_error = false;
-        let mut error_msg: Option<String> = None;
-        let mut all_mapped_values: Vec<HashMap<String, String>> = Vec::new();
-
-        if mappings.is_empty() {
+    // Execute SQL Server inserts if enabled and we have mapped rows
+    if !had_error && !all_mapped_values.is_empty() {
+        if let Err(e) = self.execute_sql_server_inserts(line_config.as_ref(), &mappings, &all_mapped_values).await {
+            let msg = format!("Erreur SQL Server pour {}: {}", filename, e);
+            DiskLogger::log_sql(&line_name, &log_path, "(voir détails)", &serde_json::to_string(&all_mapped_values).unwrap_or_default(), false, &msg);
+            self.add_db_log(line_id, "ERROR", "SQLServer", &msg, None).await;
+            self.update_line_stats(line_id, false).await;
             had_error = true;
-            error_msg = Some(format!(
-                "Aucun mapping configuré pour le modèle {}",
-                format_name.to_uppercase()
-            ));
+            error_msg = Some(msg);
         }
+    }
 
-        for result in rdr.records() {
-            let record = match result {
-                Ok(r) => r,
-                Err(e) => {
-                    had_error = true;
-                    error_msg = Some(e.to_string());
-                    break;
-                }
-            };
+    let status = if had_error { "ERROR" } else { "SUCCESS" };
+    let message = json!({
+        "rows": row_count,
+        "sample": first_mapped,
+        "error": error_msg,
+    })
+    .to_string();
 
-            row_count += 1;
+    // Insert production data record reflecting final status
+    let processed_at = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    sqlx::query(
+        "INSERT INTO production_data (line_id, filename, status, message, processed_at) 
+         VALUES (?, ?, ?, ?, ?)"
+    )
+    .bind(line_id)
+    .bind(&filename)
+    .bind(status)
+    .bind(&message)
+    .bind(&processed_at)
+    .execute(&self.pool)
+    .await?;
 
-            // Map record with line config for parameter resolution
-            let mapped = map_record_with_mappings_and_params(&record, &mappings, &line_config);
-            if first_mapped.is_none() {
-                first_mapped = Some(json!(mapped));
+    // Update statistics
+    self.update_line_stats(line_id, !had_error).await;
+
+    // Log result and move file to final destination
+    if had_error {
+        let msg = format!("Échec traitement {}: {}", filename, error_msg.as_deref().unwrap_or("unknown"));
+        DiskLogger::log_ligne(&line_name, &log_path, &msg, "ERROR");
+        self.add_db_log(line_id, "ERROR", "FileProcessor", &msg, None).await;
+
+        // Move to rejected folder if configured, otherwise delete temp file
+        if let Some(reject_dir) = line_config.as_ref().and_then(|c| c.rejected_path.clone()) {
+            let reject_path = Path::new(&reject_dir);
+            if !reject_path.exists() {
+                let _ = fs::create_dir_all(reject_path);
             }
-            all_mapped_values.push(mapped);
-        }
 
-        // If no rows or error, mark as error
-        if row_count == 0 {
-            had_error = true;
-            error_msg = Some("Fichier vide ou format invalide".to_string());
-        }
-
-        // Execute SQL Server inserts if enabled and we have mapped rows
-        if !had_error && !all_mapped_values.is_empty() {
-            if let Err(e) = self.execute_sql_server_inserts(line_config.as_ref(), &mappings, &all_mapped_values).await {
-                let msg = format!("Erreur SQL Server pour {}: {}", filename, e);
-                DiskLogger::log_sql(&line_name, &log_path, "(voir détails)", &serde_json::to_string(&all_mapped_values).unwrap_or_default(), false, &msg);
-                self.add_db_log(line_id, "ERROR", "SQLServer", &msg, None).await;
-                self.update_line_stats(line_id, false).await;
-                had_error = true;
-                error_msg = Some(msg);
-            }
-        }
-
-        let status = if had_error { "ERROR" } else { "SUCCESS" };
-        let message = json!({
-            "rows": row_count,
-            "sample": first_mapped,
-            "error": error_msg,
-        })
-        .to_string();
-
-        // Insert production data record reflecting final status
-        let processed_at = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-        sqlx::query(
-            "INSERT INTO production_data (line_id, filename, status, message, processed_at) 
-             VALUES (?, ?, ?, ?, ?)"
-        )
-        .bind(line_id)
-        .bind(&filename)
-        .bind(status)
-        .bind(&message)
-        .bind(&processed_at)
-        .execute(&self.pool)
-        .await?;
-
-        // Update statistics
-        self.update_line_stats(line_id, !had_error).await;
-
-        // Log result and move file to final destination
-        if had_error {
-            let msg = format!("Échec traitement {}: {}", filename, error_msg.as_deref().unwrap_or("unknown"));
-            DiskLogger::log_ligne(&line_name, &log_path, &msg, "ERROR");
-            self.add_db_log(line_id, "ERROR", "FileProcessor", &msg, None).await;
-
-            // Move to rejected folder if configured, otherwise delete temp file
-            if let Some(reject_dir) = line_config.as_ref().and_then(|c| c.rejected_path.clone()) {
-                let reject_path = Path::new(&reject_dir);
-                if !reject_path.exists() {
-                    let _ = fs::create_dir_all(reject_path);
-                }
-
-                let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
-                let new_filename = format!("{}_{}{}", 
-                    Path::new(&filename).file_stem().unwrap().to_str().unwrap(),
-                    timestamp,
-                    Path::new(&filename).extension().unwrap_or_default().to_str().map(|s| format!(".{}", s)).unwrap_or_default()
-                );
-                let dest_path = reject_path.join(new_filename);
-                
-                if let Err(e) = fs::rename(&temp_path, &dest_path) {
-                    eprintln!("Failed to move to rejected folder: {}", e);
-                    let _ = fs::remove_file(&temp_path);
-                }
-            } else {
+            let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
+            let new_filename = format!("{}_{}{}", 
+                Path::new(&filename).file_stem().unwrap().to_str().unwrap(),
+                timestamp,
+                Path::new(&filename).extension().unwrap_or_default().to_str().map(|s| format!(".{}", s)).unwrap_or_default()
+            );
+            let dest_path = reject_path.join(new_filename);
+            
+            if let Err(e) = fs::rename(&temp_path, &dest_path) {
+                eprintln!("Failed to move to rejected folder: {}", e);
                 let _ = fs::remove_file(&temp_path);
             }
         } else {
-            let msg = format!("Fichier {} traité avec succès - {} enregistrements", filename, row_count);
-            DiskLogger::log_ligne(&line_name, &log_path, &msg, "INFO");
-            self.add_db_log(line_id, "SUCCESS", "FileProcessor", &msg, None).await;
+            let _ = fs::remove_file(&temp_path);
+        }
+    } else {
+        let msg = format!("Fichier {} traité avec succès - {} enregistrements", filename, row_count);
+        DiskLogger::log_ligne(&line_name, &log_path, &msg, "INFO");
+        self.add_db_log(line_id, "SUCCESS", "FileProcessor", &msg, None).await;
 
-            // Archive if configured, otherwise delete temp file
-            if let Some(archive_dir) = archived_path {
-                let archive_dir_path = Path::new(&archive_dir);
-                if !archive_dir_path.exists() {
-                    if let Err(e) = fs::create_dir_all(archive_dir_path) {
-                        eprintln!("Failed to create archive directory: {}", e);
-                        let _ = fs::remove_file(&temp_path);
-                        return Ok(());
-                    }
-                }
-                
-                let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
-                let new_filename = format!("{}_{}{}", 
-                    Path::new(&filename).file_stem().unwrap().to_str().unwrap(),
-                    timestamp,
-                    Path::new(&filename).extension().unwrap_or_default().to_str().map(|s| format!(".{}", s)).unwrap_or_default()
-                );
-                
-                let dest_path = archive_dir_path.join(new_filename);
-                if let Err(e) = fs::rename(&temp_path, &dest_path) {
-                    eprintln!("Failed to archive file: {}", e);
+        // Archive if configured, otherwise delete temp file
+        if let Some(archive_dir) = archived_path {
+            let archive_dir_path = Path::new(&archive_dir);
+            if !archive_dir_path.exists() {
+                if let Err(e) = fs::create_dir_all(archive_dir_path) {
+                    eprintln!("Failed to create archive directory: {}", e);
                     let _ = fs::remove_file(&temp_path);
+                    return Ok(());
                 }
-            } else {
+            }
+            
+            let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
+            let new_filename = format!("{}_{}{}", 
+                Path::new(&filename).file_stem().unwrap().to_str().unwrap(),
+                timestamp,
+                Path::new(&filename).extension().unwrap_or_default().to_str().map(|s| format!(".{}", s)).unwrap_or_default()
+            );
+            
+            let dest_path = archive_dir_path.join(new_filename);
+            if let Err(e) = fs::rename(&temp_path, &dest_path) {
+                eprintln!("Failed to archive file: {}", e);
                 let _ = fs::remove_file(&temp_path);
             }
+        } else {
+            let _ = fs::remove_file(&temp_path);
         }
-
-        Ok(())
     }
+
+    // Cleanup: Remove temp directory if empty
+    if temp_subdir.read_dir().unwrap().count() == 0 {
+        let _ = fs::remove_dir(&temp_subdir);
+    }
+
+    Ok(())
+}
 }
 
 /// Check if file is locked (like Python's is_file_locked)

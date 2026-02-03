@@ -6,6 +6,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faDatabase, faServer, faUser, faLock, faCheck, faSpinner, faArrowRotateRight, faCloudArrowDown } from "@fortawesome/free-solid-svg-icons";
 import { check } from "@tauri-apps/plugin-updater";
+import { ConfirmDialog, useConfirmDialog } from "@/shared/ui/ConfirmDialog";
 
 interface SqlServerConfig {
   id: number;
@@ -45,6 +46,7 @@ export default function Settings() {
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ state: "idle" });
   const [appVersion, setAppVersion] = useState<string>("");
+  const { open: openConfirm, props: confirmDialogProps } = useConfirmDialog();
 
   useEffect(() => {
     loadConfig();
@@ -76,6 +78,44 @@ export default function Settings() {
   };
 
   const handleCheckUpdate = async () => {
+    // If an update is already detected, only install after explicit confirmation
+    if (updateStatus.state === "available") {
+      const version = updateStatus.version;
+      const confirmed = await openConfirm({
+        title: "Mise à jour disponible",
+        message: `Installer la mise à jour ${version} ?`,
+        confirmText: "Installer",
+        cancelText: "Plus tard",
+      });
+      if (!confirmed) return;
+
+      try {
+        // Re-check right before install to ensure the update is still available
+        const result = await check();
+        if (!result || !result.available) {
+          setUpdateStatus({ state: "uptodate" });
+          return;
+        }
+
+        const ver = result.version ?? version ?? "";
+        setUpdateStatus({ state: "downloading", version: ver });
+
+        await result.downloadAndInstall((event) => {
+          if (event.event === "Progress") {
+            setUpdateStatus({ state: "downloading", version: ver });
+          }
+        });
+
+        await result.install();
+        setUpdateStatus({ state: "ready", version: ver });
+      } catch (err) {
+        setUpdateStatus({ state: "error", message: String(err) });
+      }
+
+      return;
+    }
+
+    // First phase: only check availability (no install)
     setUpdateStatus({ state: "checking" });
     try {
       const result = await check();
@@ -86,20 +126,6 @@ export default function Settings() {
       if (result.available) {
         const version = result.version ?? "";
         setUpdateStatus({ state: "available", version });
-
-        const confirmed = window.confirm(`Installer la mise à jour ${version} ?`);
-        if (!confirmed) {
-          return;
-        }
-
-        await result.downloadAndInstall((event) => {
-          if (event.event === "Progress") {
-            setUpdateStatus({ state: "downloading", version });
-          }
-        });
-
-        await result.install();
-        setUpdateStatus({ state: "ready", version });
       } else {
         setUpdateStatus({ state: "uptodate" });
       }
@@ -150,6 +176,7 @@ export default function Settings() {
 
   return (
     <div className="p-8 flex flex-col gap-8">
+      <ConfirmDialog {...confirmDialogProps} />
       <div>
         <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Paramètres</h1>
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
