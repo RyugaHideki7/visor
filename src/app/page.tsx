@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faIndustry, faClock, faExclamationTriangle } from "@fortawesome/free-solid-svg-icons";
+import { faExclamationTriangle } from "@fortawesome/free-solid-svg-icons";
 import { invoke } from "@tauri-apps/api/core";
-import { Card, CardHeader, CardBody, Divider, Chip, Progress } from "@heroui/react";
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Pagination } from "@heroui/react";
 
 interface LineStatus {
     id: number;
@@ -32,6 +32,8 @@ const statusClassMap: Record<string, string> = {
 
 export default function Dashboard() {
     const [lineStatuses, setLineStatuses] = useState<LineStatus[]>([]);
+    const [page, setPage] = useState(1);
+    const rowsPerPage = 10;
 
     const fetchStatus = async () => {
         try {
@@ -62,11 +64,11 @@ export default function Dashboard() {
         };
     }, []);
 
-    const getProgressValue = (status: string) => {
-        if (status === "MARCHE") return 100;
-        if (status === "ALERTE") return 50;
-        return 20;
-    };
+    const totalPages = Math.max(1, Math.ceil(lineStatuses.length / rowsPerPage));
+    const paginatedItems = useMemo(() => {
+        const start = (page - 1) * rowsPerPage;
+        return lineStatuses.slice(start, start + rowsPerPage);
+    }, [lineStatuses, page]);
 
     return (
         <div className="p-8 flex flex-col gap-8">
@@ -75,83 +77,60 @@ export default function Dashboard() {
                 <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Statut en temps réel des lignes de production</p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-fr">
-                {lineStatuses.map((line) => {
-                    const statusColor = statusColorMap[line.status] || "default";
-                    
-                    return (
-                        <Card 
-                            key={line.id} 
-                            className="bg-(--bg-secondary) border border-(--border-default) shadow-sm h-full"
-                            radius="lg"
-                        >
-                            <CardHeader className="flex justify-between items-start p-5">
-                                <div className="flex gap-3 items-center">
-                                    <div 
-                                        className="p-2 rounded-lg"
-                                        style={{ 
-                                            background: `var(--status-${line.status.toLowerCase()}-bg)`, 
-                                            color: `var(--status-${line.status.toLowerCase()})` 
-                                        }}
-                                    >
-                                        <FontAwesomeIcon icon={faIndustry} className="h-5 w-5" />
-                                    </div>
-                                    <div>
-                                        <p className="text-md font-bold text-(--text-primary)">{line.name}</p>
-                                        <p className="text-xs text-(--text-tertiary)">ID: {line.id}</p>
-                                    </div>
-                                </div>
-                                <Chip 
-                                    color={statusColor} 
-                                    variant="flat" 
-                                    size="sm"
-                                    className={`font-medium ${statusClassMap[line.status] ?? ""}`}
-                                >
-                                    {line.status}
-                                </Chip>
-                            </CardHeader>
-                            
-                            <Divider className="opacity-50" />
-                            
-                            <CardBody className="p-5 flex flex-col gap-4">
-                                <div className="flex flex-col gap-2">
-                                    <div className="flex justify-between items-center text-xs">
-                                        <span className="text-(--text-tertiary)">Dernière activité</span>
-                                        <span className="text-(--text-secondary)">
-                                            {line.last_processed || "Jamais"}
-                                        </span>
-                                    </div>
-                                    <Progress 
-                                        aria-label="Status progress"
-                                        size="sm"
-                                        value={getProgressValue(line.status)}
-                                        color={statusColor}
-                                        className="max-w-md"
-                                        classNames={{
-                                            track: "bg-[var(--bg-tertiary)]",
-                                        }}
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="p-3 rounded-lg flex flex-col items-center bg-(--bg-tertiary)">
-                                        <p className="text-[10px] uppercase font-bold text-(--text-tertiary)">Traités</p>
-                                        <p className="text-lg font-bold text-(--color-success)">{line.total_processed}</p>
-                                    </div>
-                                    <div className="p-3 rounded-lg flex flex-col items-center bg-(--bg-tertiary)">
-                                        <p className="text-[10px] uppercase font-bold text-(--text-tertiary)">En attente</p>
-                                        <p className="text-lg font-bold text-(--color-warning)">{line.pending_files}</p>
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-2 items-center text-[10px] text-(--text-tertiary)">
-                                    <FontAwesomeIcon icon={faClock} />
-                                    <span>Actualisé toutes les 5 secondes</span>
-                                </div>
-                            </CardBody>
-                        </Card>
-                    );
-                })}
+            <div className="bg-(--bg-secondary) border border-(--border-default) rounded-xl p-4">
+                <Table
+                    aria-label="Statut des lignes de production"
+                    removeWrapper
+                    bottomContent={
+                        <div className="flex justify-center">
+                            <Pagination
+                                page={page}
+                                total={totalPages}
+                                isCompact
+                                showControls
+                                size="sm"
+                                onChange={setPage}
+                            />
+                        </div>
+                    }
+                    classNames={{
+                        th: "text-(--text-secondary) text-center",
+                        td: "text-(--text-primary) text-center",
+                    }}
+                >
+                    <TableHeader>
+                        <TableColumn>Ligne</TableColumn>
+                        <TableColumn>ID</TableColumn>
+                        <TableColumn>Statut</TableColumn>
+                        <TableColumn>Dernière activité</TableColumn>
+                        <TableColumn>Traités</TableColumn>
+                        <TableColumn>En attente</TableColumn>
+                    </TableHeader>
+                    <TableBody emptyContent="Aucune ligne trouvée" items={paginatedItems}>
+                        {(line) => {
+                            const statusColor = statusColorMap[line.status] || "default";
+                            return (
+                                <TableRow key={line.id}>
+                                    <TableCell className="font-semibold text-(--text-primary)">{line.name}</TableCell>
+                                    <TableCell className="text-(--text-tertiary)">{line.id}</TableCell>
+                                    <TableCell className="text-center">
+                                        <Chip 
+                                            color={statusColor} 
+                                            variant="flat" 
+                                            size="sm"
+                                            className={`font-medium ${statusClassMap[line.status] ?? ""}`}
+                                        >
+                                            {line.status}
+                                        </Chip>
+                                    </TableCell>
+                                    <TableCell>{line.last_processed || "Jamais"}</TableCell>
+                                    <TableCell className="text-(--color-success)">{line.total_processed}</TableCell>
+                                    <TableCell className="text-(--color-warning)">{line.pending_files}</TableCell>
+                                </TableRow>
+                            );
+                        }}
+                    </TableBody>
+                </Table>
             </div>
 
             {lineStatuses.length === 0 && (
