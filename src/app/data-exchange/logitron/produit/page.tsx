@@ -13,7 +13,7 @@ type ExportDatResult = {
 };
 
 export default function LogitronProduitPage() {
-  const [outputPath, setOutputPath] = useState<string>("X:\\machine1\\produit.dat");
+  const [outputPath, setOutputPath] = useState<string>("");
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<ExportDatResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,9 +41,11 @@ export default function LogitronProduitPage() {
     setResult(null);
     setExportStatus(null);
 
+    const pathToUse = outputPath.trim().length > 0 ? outputPath : "produit.dat";
+
     try {
       const res = await invoke<ExportDatResult>("export_logitron_produit_dat", {
-        output_path: outputPath,
+        outputPath: pathToUse,
       });
       setResult(res);
       setExportStatus(`Export OK: ${res.rows} lignes → ${res.output_path}`);
@@ -114,7 +116,7 @@ export default function LogitronProduitPage() {
       </Tabs>
 
       {activeTab === "export" && (
-        <Card className="bg-[var(--bg-secondary)] border border-[var(--border-default)]">
+        <Card className="bg-(--bg-secondary) border border-(--border-default)">
           <CardHeader className="flex flex-col gap-1">
             <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
               Export
@@ -130,7 +132,7 @@ export default function LogitronProduitPage() {
               labelPlacement="outside"
               value={outputPath}
               onValueChange={setOutputPath}
-              placeholder="Ex: X:\\machine1\\produit.dat"
+              placeholder="Ex: ...\\produit.dat"
               endContent={
                 <Button
                   isIconOnly
@@ -138,14 +140,14 @@ export default function LogitronProduitPage() {
                   size="sm"
                   onPress={async () => {
                     const selected = await save({
-                      defaultPath: outputPath || undefined,
+                      defaultPath: (outputPath && outputPath.trim()) || "produit.dat",
                       filters: [{ name: "DAT", extensions: ["dat"] }],
                     });
                     if (selected) {
                       setOutputPath(selected as string);
                     }
                   }}
-                  className="text-[var(--text-secondary)]"
+                  className="text-(--text-secondary)"
                 >
                   <FontAwesomeIcon icon={faFolderOpen} />
                 </Button>
@@ -163,19 +165,19 @@ export default function LogitronProduitPage() {
               onPress={handleExport}
               isDisabled={isRunning || !outputPath.trim()}
               isLoading={isRunning}
-              className="bg-[var(--button-primary-bg)] text-white"
+              className="bg-(--button-primary-bg) text-white"
             >
               {isRunning ? "Export en cours..." : "Exporter"}
             </Button>
 
             {exportStatus && (
-              <div className="px-4 py-2 rounded-lg text-sm bg-[var(--color-success-bg)] text-[var(--color-success)]">
+              <div className="px-4 py-2 rounded-lg text-sm bg-(--color-success-bg) text-(--color-success)">
                 {exportStatus}
               </div>
             )}
 
             {error && (
-              <div className="px-4 py-2 rounded-lg text-sm bg-[var(--color-error-bg)] text-[var(--color-error)]">
+              <div className="px-4 py-2 rounded-lg text-sm bg-(--color-error-bg) text-(--color-error)">
                 Erreur: {error}
               </div>
             )}
@@ -184,7 +186,7 @@ export default function LogitronProduitPage() {
       )}
 
       {activeTab === "sql" && (
-        <Card className="bg-[var(--bg-secondary)] border border-[var(--border-default)]">
+        <Card className="bg-(--bg-secondary) border border-(--border-default)">
           <CardHeader className="flex justify-between items-start gap-4">
             <div className="flex flex-col gap-1">
               <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -200,7 +202,7 @@ export default function LogitronProduitPage() {
                 startContent={<FontAwesomeIcon icon={faRotateRight} />}
                 onPress={handleResetQuery}
                 isDisabled={isSavingQuery}
-                className="border-[var(--border-default)] text-[var(--text-primary)]"
+                className="border-(--border-default) text-(--text-primary)"
               >
                 Réinitialiser
               </Button>
@@ -209,7 +211,7 @@ export default function LogitronProduitPage() {
                 startContent={<FontAwesomeIcon icon={faSave} />}
                 onPress={handleSaveQuery}
                 isLoading={isSavingQuery}
-                className="bg-[var(--button-primary-bg)] text-white"
+                className="bg-(--button-primary-bg) text-white"
               >
                 Sauvegarder
               </Button>
@@ -233,8 +235,8 @@ export default function LogitronProduitPage() {
               <div
                 className={`px-4 py-2 rounded-lg text-sm ${
                   saveStatus.toLowerCase().includes("erreur")
-                    ? "bg-[var(--color-error-bg)] text-[var(--color-error)]"
-                    : "bg-[var(--color-success-bg)] text-[var(--color-success)]"
+                    ? "bg-(--color-error-bg) text-(--color-error)"
+                    : "bg-(--color-success-bg) text-(--color-success)"
                 }`}
               >
                 {saveStatus}
@@ -242,7 +244,7 @@ export default function LogitronProduitPage() {
             )}
 
             {error && (
-              <div className="px-4 py-2 rounded-lg text-sm bg-[var(--color-error-bg)] text-[var(--color-error)]">
+              <div className="px-4 py-2 rounded-lg text-sm bg-(--color-error-bg) text-(--color-error)">
                 Erreur: {error}
               </div>
             )}

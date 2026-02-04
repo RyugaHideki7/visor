@@ -10,8 +10,7 @@ pub struct SqlQuery {
     pub query_template: String,
 }
 
-pub(crate) const DEFAULT_LOGITRON_PRODUIT_QUERY: &str = r#"
-    SELECT 
+pub(crate) const DEFAULT_LOGITRON_PRODUIT_QUERY: &str = r#"SELECT 
         ITMREF_0 as CODE_PRODUIT,
         ITMDES1_0 as LIBELLE,
         CASE WHEN ITMWEI_0 IS NULL THEN 0 ELSE ITMWEI_0 END AS POIDS_CASIER,

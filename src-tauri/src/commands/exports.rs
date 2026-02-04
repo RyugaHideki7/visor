@@ -7,6 +7,7 @@ use std::fs;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 use tauri::State;
+use tiberius::numeric::Decimal;
 use tiberius::QueryItem;
 
 #[derive(Debug, Serialize)]
@@ -68,11 +69,39 @@ pub async fn export_logitron_produit_dat(
 
         let code_produit: Option<&str> = row.get("CODE_PRODUIT");
         let libelle: Option<&str> = row.get("LIBELLE");
-        let poids_casier: Option<f64> = row.get("POIDS_CASIER");
+        let poids_casier: Option<String> = row
+            .try_get::<Decimal, _>("POIDS_CASIER")
+            .ok()
+            .flatten()
+            .map(|v| v.to_string())
+            .or_else(|| {
+                row.try_get::<f64, _>("POIDS_CASIER")
+                    .ok()
+                    .flatten()
+                    .map(|v| v.to_string())
+            })
+            .or_else(|| {
+                row.try_get::<&str, _>("POIDS_CASIER")
+                    .ok()
+                    .flatten()
+                    .map(|s| s.to_string())
+            });
         let ean_carton: Option<&str> = row.get("EAN_CARTON");
-        let nb_bouteille_casier: Option<i64> = row.get("NB_BOUTEILLE_PAR_CASIER");
-        let nb_bouteille_palette: Option<i64> = row.get("NB_BOUTEILLE_PAR_PALETTE");
-        let nb_casier_palette: Option<i64> = row.get("NB_CASIER_PAR_PALETTE");
+        let nb_bouteille_casier: Option<i64> = row
+            .try_get::<i64, _>("NB_BOUTEILLE_PAR_CASIER")
+            .ok()
+            .flatten()
+            .or_else(|| row.try_get::<i32, _>("NB_BOUTEILLE_PAR_CASIER").ok().flatten().map(|v| v as i64));
+        let nb_bouteille_palette: Option<i64> = row
+            .try_get::<i64, _>("NB_BOUTEILLE_PAR_PALETTE")
+            .ok()
+            .flatten()
+            .or_else(|| row.try_get::<i32, _>("NB_BOUTEILLE_PAR_PALETTE").ok().flatten().map(|v| v as i64));
+        let nb_casier_palette: Option<i64> = row
+            .try_get::<i64, _>("NB_CASIER_PAR_PALETTE")
+            .ok()
+            .flatten()
+            .or_else(|| row.try_get::<i32, _>("NB_CASIER_PAR_PALETTE").ok().flatten().map(|v| v as i64));
         let methode_dluo: Option<&str> = row.get("METHODE_CALCUL_DLUO");
         let ean_palette: Option<&str> = row.get("EAN_PALETTE");
 
@@ -80,7 +109,7 @@ pub async fn export_logitron_produit_dat(
             "{}{}{}{}{}{}{}{}{}\n",
             format_left(code_produit.map(|s| s.to_string()), 14),
             format_left(libelle.map(|s| s.to_string()), 30),
-            format_left_any(poids_casier, 22),
+            format_left(poids_casier, 22),
             format_left(ean_carton.map(|s| s.to_string()), 14),
             format_left_any(nb_bouteille_casier, 22),
             format_left_any(nb_bouteille_palette, 22),
