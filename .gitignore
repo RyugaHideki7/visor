@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+test-data/ateis_sample.csv
+test-data/logitron_sample.csv
+test-data/data.rar

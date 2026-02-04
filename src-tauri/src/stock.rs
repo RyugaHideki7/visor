@@ -15,7 +15,7 @@ use sqlx::FromRow;
 use encoding_rs::{UTF_8, WINDOWS_1252};
 use tiberius::{Client, AuthMethod, Config as SqlConfig, ToSql};
 use tokio_util::compat::TokioAsyncWriteCompatExt;
-use crate::commands::SqlServerConfig;
+use crate::commands::sql_server::SqlServerConfig;
 use log::info;
 
 pub struct WatcherState {

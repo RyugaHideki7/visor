@@ -48,7 +48,7 @@ export default function Dashboard() {
 
     useEffect(() => {
         fetchStatus();
-        const interval = setInterval(fetchStatus, 5000);
+        const interval = setInterval(fetchStatus, 30000);
         const onFocus = () => fetchStatus();
         const onVisibility = () => {
             if (document.visibilityState === "visible") {

@@ -1,10 +1,14 @@
 use crate::db::DbState;
 use crate::stock;
 use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
+use futures_util::TryStreamExt;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Pool, Sqlite};
+use std::fs;
+use std::io::{BufWriter, Write};
+use std::path::Path;
 use tauri::{State, AppHandle};
-use tiberius::{Client, AuthMethod, Config as SqlConfig};
+use tiberius::{Client, AuthMethod, Config as SqlConfig, QueryItem};
 use tokio_util::compat::TokioAsyncWriteCompatExt;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -29,6 +33,186 @@ pub struct Line {
     pub last_file_time: Option<String>,
     pub etat_actuel: Option<String>,
     pub created_at: Option<String>,
+}
+
+async fn get_or_init_sql_query(pool: &Pool<Sqlite>, format_name: &str, default_query: &str) -> Result<String, String> {
+    // Try get
+    if let Some(existing) = sqlx::query_scalar::<_, String>(
+        "SELECT query_template FROM sql_queries WHERE format_name = ?",
+    )
+    .bind(format_name)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| e.to_string())? {
+        return Ok(existing);
+    }
+
+    // Insert default if missing
+    sqlx::query(
+        "INSERT INTO sql_queries (format_name, query_template) VALUES (?, ?)",
+    )
+    .bind(format_name)
+    .bind(default_query)
+    .execute(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(default_query.to_string())
+}
+
+fn format_left(value: Option<String>, width: usize) -> String {
+    let s = value.unwrap_or_default();
+    let mut out: String = s.chars().take(width).collect();
+    if out.chars().count() < width {
+        out.push_str(&" ".repeat(width - out.chars().count()));
+    }
+    out
+}
+
+fn format_left_any<T: ToString>(value: Option<T>, width: usize) -> String {
+    format_left(value.map(|v| v.to_string()), width)
+}
+
+async fn connect_sql_server(cfg: SqlServerConfig) -> Result<Client<tokio_util::compat::Compat<tokio::net::TcpStream>>, String> {
+    if !cfg.enabled {
+        return Err("SQL Server désactivé (activez la connexion dans Paramètres)".to_string());
+    }
+
+    let server = cfg.server.unwrap_or_default();
+    let database = cfg.database.unwrap_or_default();
+    let username = cfg.username.unwrap_or_default();
+    let password = cfg.password.unwrap_or_default();
+
+    if server.trim().is_empty() {
+        return Err("SQL Server: serveur manquant".to_string());
+    }
+    if username.trim().is_empty() {
+        return Err("SQL Server: utilisateur manquant".to_string());
+    }
+    if password.trim().is_empty() {
+        return Err("SQL Server: mot de passe manquant".to_string());
+    }
+
+    let mut tiberius_config = SqlConfig::new();
+    tiberius_config.host(server.as_str());
+    tiberius_config.port(1433);
+    tiberius_config.authentication(AuthMethod::sql_server(username, password));
+    tiberius_config.trust_cert();
+    if !database.trim().is_empty() {
+        tiberius_config.database(database);
+    }
+
+    let tcp = tokio::net::TcpStream::connect(tiberius_config.get_addr())
+        .await
+        .map_err(|e| e.to_string())?;
+    tcp.set_nodelay(true).map_err(|e| e.to_string())?;
+
+    Client::connect(tiberius_config, tcp.compat_write())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn export_logitron_produit_dat(state: State<'_, DbState>, output_path: String) -> Result<ExportDatResult, String> {
+    if output_path.trim().is_empty() {
+        return Err("Chemin de sortie manquant".to_string());
+    }
+
+    let cfg = get_sql_server_config(state.clone()).await?;
+    let mut client = connect_sql_server(cfg).await?;
+
+    let query = get_or_init_sql_query(&state.pool, "LOGITRON_PRODUIT", DEFAULT_LOGITRON_PRODUIT_QUERY).await?;
+
+    let mut stream = client.query(query.as_str(), &[]).await.map_err(|e| e.to_string())?;
+
+    let out_path = Path::new(&output_path);
+    if let Some(parent) = out_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+    }
+
+    let tmp_path = out_path.with_extension("tmp");
+    let tmp_file = fs::File::create(&tmp_path).map_err(|e| e.to_string())?;
+    let mut writer = BufWriter::new(tmp_file);
+
+    let mut row_count: i64 = 0;
+    while let Some(item) = stream.try_next().await.map_err(|e| e.to_string())? {
+        let row = match item {
+            QueryItem::Row(r) => r,
+            _ => continue,
+        };
+
+        let code_produit: Option<&str> = row.get("CODE_PRODUIT");
+        let libelle: Option<&str> = row.get("LIBELLE");
+        let poids_casier: Option<f64> = row.get("POIDS_CASIER");
+        let ean_carton: Option<&str> = row.get("EAN_CARTON");
+        let nb_bouteille_casier: Option<i64> = row.get("NB_BOUTEILLE_PAR_CASIER");
+        let nb_bouteille_palette: Option<i64> = row.get("NB_BOUTEILLE_PAR_PALETTE");
+        let nb_casier_palette: Option<i64> = row.get("NB_CASIER_PAR_PALETTE");
+        let methode_dluo: Option<&str> = row.get("METHODE_CALCUL_DLUO");
+        let ean_palette: Option<&str> = row.get("EAN_PALETTE");
+
+        let line = format!(
+            "{}{}{}{}{}{}{}{}{}\n",
+            format_left(code_produit.map(|s| s.to_string()), 14),
+            format_left(libelle.map(|s| s.to_string()), 30),
+            format_left_any(poids_casier, 22),
+            format_left(ean_carton.map(|s| s.to_string()), 14),
+            format_left_any(nb_bouteille_casier, 22),
+            format_left_any(nb_bouteille_palette, 22),
+            format_left_any(nb_casier_palette, 22),
+            format_left(methode_dluo.map(|s| s.to_string()), 8),
+            format_left(ean_palette.map(|s| s.to_string()), 14),
+        );
+
+        writer.write_all(line.as_bytes()).map_err(|e| e.to_string())?;
+        row_count += 1;
+    }
+
+    writer.flush().map_err(|e| e.to_string())?;
+    drop(writer);
+
+    if out_path.exists() {
+        fs::remove_file(out_path).map_err(|e| e.to_string())?;
+    }
+    fs::rename(&tmp_path, out_path).map_err(|e| e.to_string())?;
+
+    Ok(ExportDatResult { output_path, rows: row_count })
+}
+
+#[tauri::command]
+pub async fn get_sql_query(state: State<'_, DbState>, format_name: String) -> Result<String, String> {
+    let fname = format_name.to_uppercase();
+    match fname.as_str() {
+        "LOGITRON_PRODUIT" => get_or_init_sql_query(&state.pool, &fname, DEFAULT_LOGITRON_PRODUIT_QUERY).await,
+        _ => get_or_init_sql_query(&state.pool, &fname, "" ).await,
+    }
+}
+
+#[tauri::command]
+pub async fn reset_sql_query(state: State<'_, DbState>, format_name: String) -> Result<(), String> {
+    let fname = format_name.to_uppercase();
+    let default = match fname.as_str() {
+        "LOGITRON_PRODUIT" => DEFAULT_LOGITRON_PRODUIT_QUERY,
+        _ => "",
+    };
+
+    if default.is_empty() {
+        return Err("Aucun défaut défini pour ce format".to_string());
+    }
+
+    sqlx::query(
+        "INSERT INTO sql_queries (format_name, query_template) VALUES (?, ?) \
+         ON CONFLICT(format_name) DO UPDATE SET query_template = excluded.query_template",
+    )
+    .bind(&fname)
+    .bind(default)
+    .execute(&state.pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -64,6 +248,28 @@ pub struct ConnectionTestResult {
     pub success: bool,
     pub error: Option<String>,
 }
+
+#[derive(Debug, Serialize)]
+pub struct ExportDatResult {
+    pub output_path: String,
+    pub rows: i64,
+}
+
+const DEFAULT_LOGITRON_PRODUIT_QUERY: &str = r#"
+    SELECT 
+        ITMREF_0 as CODE_PRODUIT,
+        ITMDES1_0 as LIBELLE,
+        CASE WHEN ITMWEI_0 IS NULL THEN 0 ELSE ITMWEI_0 END AS POIDS_CASIER,
+        CASE WHEN EANCOD_0 IS NULL THEN '0' ELSE EANCOD_0 END AS EAN_CARTON,
+        CASE WHEN YBP_0 IS NULL THEN 0 ELSE YBP_0 END AS NB_BOUTEILLE_PAR_CASIER,
+        CASE WHEN YBPL_0 IS NULL THEN 0 ELSE YBPL_0 END AS NB_BOUTEILLE_PAR_PALETTE,
+        CASE WHEN YPPL_0 IS NULL THEN 0 ELSE YPPL_0 END AS NB_CASIER_PAR_PALETTE,
+        ISNULL(YCDLUO_0, '') as METHODE_CALCUL_DLUO,
+        CASE WHEN YTEMPEAN_0 IS NULL THEN '0' ELSE YTEMPEAN_0 END AS EAN_PALETTE
+    FROM ITHRI.ITMMASTER
+    WHERE ITMREF_0 LIKE 'PF%'
+    ORDER BY ITMREF_0
+"#;
 
 #[derive(Debug, Serialize)]
 pub struct DashboardLine {

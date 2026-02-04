@@ -102,6 +102,7 @@ dependencies = [
  "csv",
  "encoding_rs",
  "encoding_rs_io",
+ "futures-util",
  "log",
  "notify",
  "serde",
