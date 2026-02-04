@@ -2,12 +2,12 @@
 
 import React from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronDown, faIndustry } from "@fortawesome/free-solid-svg-icons";
+import { faChevronDown } from "@fortawesome/free-solid-svg-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { SIDEBAR_ITEMS } from "@/shared/constants/sidebar";
+import { SIDEBAR_MENU, type SidebarItem } from "@/shared/constants/sidebar";
 import { useSidebar } from "@/shared/contexts/sidebar";
 import { useTheme } from "@/shared/contexts/theme";
 import { VisorLogo } from "@/shared/ui/VisorLogo";
@@ -17,16 +17,27 @@ export function Sidebar() {
   const { theme } = useTheme();
   const prefersReducedMotion = useReducedMotion();
   const pathname = usePathname();
-  const [isProductionOpen, setIsProductionOpen] = useState(true);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    production: true,
+    "data-exchange": true,
+    "data-exchange-logitron": true,
+  });
 
   useEffect(() => {
     if (!isExpanded) {
-      setIsProductionOpen(false);
+      setOpenGroups({});
     }
   }, [isExpanded]);
 
-  // Group production-related pages: lines, mapping, sql-queries, journaux
-  const productionKeys = useMemo(() => new Set(["lines", "mapping", "sql-queries", "logs"]), []);
+  const isItemActive = useMemo(() => {
+    const visit = (item: SidebarItem): boolean => {
+      if (item.href && pathname === item.href) return true;
+      if (item.children) return item.children.some(visit);
+      return false;
+    };
+
+    return (item: SidebarItem) => visit(item);
+  }, [pathname]);
 
   const containerStyle = useMemo(
     () => ({
@@ -88,73 +99,71 @@ export function Sidebar() {
           alignItems: isExpanded ? "stretch" : "center",
         }}
       >
-        {(() => {
-          let productionRendered = false;
-          const out: React.ReactElement[] = [];
+        {SIDEBAR_MENU.map((item) => {
+          const renderItem = (it: SidebarItem, depth: number): React.ReactElement => {
+            const hasChildren = !!it.children?.length;
+            const groupOpen = !!openGroups[it.key];
+            const active = isItemActive(it);
 
-          for (const item of SIDEBAR_ITEMS) {
-            if (productionKeys.has(item.key)) {
-              if (productionRendered) {
-                continue;
-              }
-              productionRendered = true;
+            const commonStyle = {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: isExpanded ? "space-between" : "center",
+              gap: 8,
+              padding: isExpanded ? "10px 12px" : "10px",
+              borderRadius: 8,
+              border: "none",
+              width: "100%",
+              minHeight: 44,
+              background: active ? "var(--bg-active)" : "transparent",
+              color: active ? "var(--text-primary)" : "var(--text-secondary)",
+              cursor: "pointer",
+              transition: "background 0.15s ease, color 0.15s ease",
+            } as const;
 
-              const isGroupActive = SIDEBAR_ITEMS.some((i) => productionKeys.has(i.key) && pathname === i.href);
+            const indent = isExpanded ? depth * 14 : 0;
 
-              out.push(
-                <div key="production-group" style={{ width: "100%" }}>
+            if (hasChildren) {
+              return (
+                <div key={it.key} style={{ width: "100%" }}>
                   <button
                     type="button"
-                    title={!isExpanded ? "Remontée de production" : undefined}
-                    onClick={() => setIsProductionOpen((v) => !v)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: isExpanded ? "space-between" : "center",
-                      gap: 8,
-                      padding: isExpanded ? "10px 12px" : "10px",
-                      borderRadius: 8,
-                      border: "none",
-                      width: "100%",
-                      minHeight: 44,
-                      background: isGroupActive ? "var(--bg-active)" : "transparent",
-                      color: isGroupActive ? "var(--text-primary)" : "var(--text-secondary)",
-                      cursor: "pointer",
-                      transition: "background 0.15s ease, color 0.15s ease",
-                    }}
+                    title={!isExpanded ? it.label : undefined}
+                    onClick={() => setOpenGroups((prev) => ({ ...prev, [it.key]: !prev[it.key] }))}
+                    style={{ ...commonStyle, paddingLeft: isExpanded ? 12 + indent : 0 }}
                     onMouseEnter={(e) => {
-                      if (!isGroupActive) {
+                      if (!active) {
                         e.currentTarget.style.background = "var(--bg-hover)";
                         e.currentTarget.style.color = "var(--text-primary)";
                       }
                     }}
                     onMouseLeave={(e) => {
-                      if (!isGroupActive) {
+                      if (!active) {
                         e.currentTarget.style.background = "transparent";
                         e.currentTarget.style.color = "var(--text-secondary)";
                       }
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                      <FontAwesomeIcon icon={faIndustry} className="h-4 w-4" style={{ flexShrink: 0 }} />
+                      <FontAwesomeIcon icon={it.icon} className="h-4 w-4" style={{ flexShrink: 0 }} />
                       <AnimatePresence initial={false}>
                         {isExpanded && (
                           <motion.span
-                            key="label"
+                            key={`${it.key}-label`}
                             initial={{ opacity: 0, x: -6 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: -6 }}
                             transition={{ duration: prefersReducedMotion ? 0 : 0.15, ease: "easeOut" }}
                             style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                           >
-                            Remontée de production
+                            {it.label}
                           </motion.span>
                         )}
                       </AnimatePresence>
                     </div>
                     {isExpanded && (
                       <motion.span
-                        animate={{ rotate: isProductionOpen ? 0 : -90 }}
+                        animate={{ rotate: groupOpen ? 0 : -90 }}
                         transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.18, ease: "easeOut" }}
                         style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 16 }}
                       >
@@ -164,7 +173,7 @@ export function Sidebar() {
                   </button>
 
                   <AnimatePresence initial={false}>
-                    {isExpanded && isProductionOpen && (
+                    {isExpanded && groupOpen && (
                       <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: "auto", opacity: 1 }}
@@ -172,78 +181,21 @@ export function Sidebar() {
                         transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.18, ease: "easeOut" }}
                         style={{ overflow: "hidden", display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}
                       >
-                        {SIDEBAR_ITEMS.filter((i) => productionKeys.has(i.key)).map((child) => {
-                          const isActive = pathname === child.href;
-                          return (
-                            <Link
-                              key={child.key}
-                              href={child.href}
-                              aria-current={isActive ? "page" : undefined}
-                              title={!isExpanded ? child.label : undefined}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: isExpanded ? "flex-start" : "center",
-                                gap: 12,
-                                padding: isExpanded ? "9px 12px" : "10px",
-                                borderRadius: 8,
-                                background: isActive ? "var(--bg-active)" : "transparent",
-                                color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
-                                textDecoration: "none",
-                                transition: "background 0.15s ease, color 0.15s ease",
-                                cursor: "pointer",
-                                width: isExpanded ? "calc(100% - 14px)" : 44,
-                                minHeight: 44,
-                                marginLeft: isExpanded ? 14 : 0,
-                              }}
-                              onMouseEnter={(e) => {
-                                if (!isActive) {
-                                  e.currentTarget.style.background = "var(--bg-hover)";
-                                  e.currentTarget.style.color = "var(--text-primary)";
-                                }
-                              }}
-                              onMouseLeave={(e) => {
-                                if (!isActive) {
-                                  e.currentTarget.style.background = "transparent";
-                                  e.currentTarget.style.color = "var(--text-secondary)";
-                                }
-                              }}
-                            >
-                              <FontAwesomeIcon icon={child.icon} className="h-4 w-4" style={{ flexShrink: 0 }} />
-                              <AnimatePresence initial={false}>
-                                {isExpanded && (
-                                  <motion.span
-                                    key="label"
-                                    initial={{ opacity: 0, x: -6 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -6 }}
-                                    transition={{ duration: prefersReducedMotion ? 0 : 0.15, ease: "easeOut" }}
-                                    style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap" }}
-                                  >
-                                    {child.label}
-                                  </motion.span>
-                                )}
-                              </AnimatePresence>
-                            </Link>
-                          );
-                        })}
+                        {it.children!.map((c) => renderItem(c, depth + 1))}
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </div>,
+                </div>
               );
-
-              continue;
             }
 
-            const isActive = pathname === item.href;
-
-            out.push(
+            const isActive = !!it.href && pathname === it.href;
+            return (
               <Link
-                key={item.key}
-                href={item.href}
+                key={it.key}
+                href={it.href ?? "#"}
                 aria-current={isActive ? "page" : undefined}
-                title={!isExpanded ? item.label : undefined}
+                title={!isExpanded ? it.label : undefined}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -258,6 +210,7 @@ export function Sidebar() {
                   cursor: "pointer",
                   width: isExpanded ? "100%" : 44,
                   minHeight: 44,
+                  paddingLeft: isExpanded ? 12 + indent : 0,
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
@@ -272,27 +225,27 @@ export function Sidebar() {
                   }
                 }}
               >
-                <FontAwesomeIcon icon={item.icon} className="h-4 w-4" style={{ flexShrink: 0 }} />
+                <FontAwesomeIcon icon={it.icon} className="h-4 w-4" style={{ flexShrink: 0 }} />
                 <AnimatePresence initial={false}>
                   {isExpanded && (
                     <motion.span
-                      key="label"
+                      key={`${it.key}-label`}
                       initial={{ opacity: 0, x: -6 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -6 }}
                       transition={{ duration: prefersReducedMotion ? 0 : 0.15, ease: "easeOut" }}
                       style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap" }}
                     >
-                      {item.label}
+                      {it.label}
                     </motion.span>
                   )}
                 </AnimatePresence>
-              </Link>,
+              </Link>
             );
-          }
+          };
 
-          return out;
-        })()}
+          return renderItem(item, 0);
+        })}
       </nav>
     </motion.aside>
   );
