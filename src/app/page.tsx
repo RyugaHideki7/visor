@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faExclamationTriangle } from "@fortawesome/free-solid-svg-icons";
+import { faExclamationTriangle, faArrowUp, faArrowDown } from "@fortawesome/free-solid-svg-icons";
 import { invoke } from "@tauri-apps/api/core";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Pagination, Tabs, Tab } from "@heroui/react";
 
@@ -34,8 +34,9 @@ const statusClassMap: Record<string, string> = {
 export default function Dashboard() {
     const [lineStatuses, setLineStatuses] = useState<LineStatus[]>([]);
     const [page, setPage] = useState(1);
-    const rowsPerPage = 10;
+    const rowsPerPage = 20;
     const [siteFilter, setSiteFilter] = useState<string>("ALL");
+    const [sortAsc, setSortAsc] = useState<boolean>(true);
 
     const fetchStatus = async () => {
         try {
@@ -79,9 +80,11 @@ export default function Dashboard() {
     }, [lineStatuses]);
 
     const filtered = useMemo(() => {
-        if (siteFilter === "ALL") return lineStatuses;
-        return lineStatuses.filter((l) => (l.site || "").trim() === siteFilter);
-    }, [lineStatuses, siteFilter]);
+        const scoped = siteFilter === "ALL" ? lineStatuses : lineStatuses.filter((l) => (l.site || "").trim() === siteFilter);
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+        const sorted = [...scoped].sort((a, b) => (sortAsc ? 1 : -1) * collator.compare(a.name, b.name));
+        return sorted;
+    }, [lineStatuses, siteFilter, sortAsc]);
 
     useEffect(() => {
         setPage(1);
@@ -134,7 +137,28 @@ export default function Dashboard() {
                     }}
                 >
                     <TableHeader>
-                        <TableColumn>Ligne</TableColumn>
+                        <TableColumn>
+                            <div className="flex items-center justify-center gap-2">
+                                <span className="font-semibold text-(--text-primary)">Ligne</span>
+                                <button
+                                    type="button"
+                                    className="flex items-center gap-1 text-(--text-tertiary) hover:text-(--accent-primary) transition"
+                                    onClick={() => setSortAsc((v) => !v)}
+                                    aria-label={sortAsc ? "Trier décroissant" : "Trier croissant"}
+                                >
+                                    <FontAwesomeIcon
+                                        icon={faArrowUp}
+                                        className="text-xs"
+                                        style={{ color: sortAsc ? "var(--accent-primary)" : "var(--text-tertiary)" }}
+                                    />
+                                    <FontAwesomeIcon
+                                        icon={faArrowDown}
+                                        className="text-xs"
+                                        style={{ color: !sortAsc ? "var(--accent-primary)" : "var(--text-tertiary)" }}
+                                    />
+                                </button>
+                            </div>
+                        </TableColumn>
                         <TableColumn>ID</TableColumn>
                         <TableColumn>Statut</TableColumn>
                         <TableColumn>Dernière activité</TableColumn>

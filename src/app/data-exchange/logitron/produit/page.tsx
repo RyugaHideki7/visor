@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faSave, faRotateRight, faDownload, faFolderOpen } from "@fortawesome/free-solid-svg-icons";
-import { Button, Tabs, Tab, Card, CardBody, CardHeader, Divider, Input, Textarea } from "@heroui/react";
+import { Button, Tabs, Tab, Card, CardBody, CardHeader, Divider, Input, Textarea, Switch } from "@heroui/react";
 import { save } from "@tauri-apps/plugin-dialog";
 
 type ExportDatResult = {
@@ -22,6 +22,8 @@ export default function LogitronProduitPage() {
   const [isSavingQuery, setIsSavingQuery] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
+  const [autoEnabled, setAutoEnabled] = useState(false);
+  const [autoIntervalSec, setAutoIntervalSec] = useState<number>(60);
 
   useEffect(() => {
     const loadQuery = async () => {
@@ -32,8 +34,55 @@ export default function LogitronProduitPage() {
         console.error("Failed to load SQL query", e);
       }
     };
+
+    // load saved path
+    const savedPath = localStorage.getItem("logitron_produit_output_path");
+    if (savedPath) {
+      setOutputPath(savedPath);
+    }
+
+    const savedAuto = localStorage.getItem("logitron_produit_auto_enabled");
+    if (savedAuto !== null) {
+      setAutoEnabled(savedAuto === "true");
+    }
+    const savedInterval = localStorage.getItem("logitron_produit_auto_interval_sec");
+    if (savedInterval) {
+      const v = Number(savedInterval);
+      if (Number.isFinite(v) && v > 0) {
+        setAutoIntervalSec(v);
+      }
+    }
+
     loadQuery();
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("logitron_produit_output_path", outputPath);
+  }, [outputPath]);
+
+  useEffect(() => {
+    localStorage.setItem("logitron_produit_auto_enabled", autoEnabled.toString());
+  }, [autoEnabled]);
+
+  useEffect(() => {
+    if (Number.isFinite(autoIntervalSec) && autoIntervalSec > 0) {
+      localStorage.setItem("logitron_produit_auto_interval_sec", autoIntervalSec.toString());
+    }
+  }, [autoIntervalSec]);
+
+  useEffect(() => {
+    if (!autoEnabled) return;
+    if (!Number.isFinite(autoIntervalSec) || autoIntervalSec <= 0) return;
+
+    const id = setInterval(() => {
+      if (isRunning) return; // avoid overlapping runs
+      const pathToUse = outputPath.trim().length > 0 ? outputPath : "produit.dat";
+      if (!pathToUse.trim()) return;
+      handleExport();
+    }, autoIntervalSec * 1000);
+
+    return () => clearInterval(id);
+  }, [autoEnabled, autoIntervalSec, outputPath, isRunning]);
 
   const handleExport = async () => {
     setIsRunning(true);
@@ -159,11 +208,37 @@ export default function LogitronProduitPage() {
               }}
             />
 
+            <div className="border border-(--border-default) rounded-lg p-4 bg-(--bg-tertiary) flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-4 justify-between">
+                <div className="flex items-center gap-3">
+                  <Switch isSelected={autoEnabled} onValueChange={setAutoEnabled}>
+                    Auto-export
+                  </Switch>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                    Intervalle (s)
+                  </span>
+                  <Input
+                    type="number"
+                    aria-label="Intervalle (secondes)"
+                    value={autoIntervalSec.toString()}
+                    onValueChange={(v) => setAutoIntervalSec(Math.max(1, Number(v) || 0))}
+                    className="w-32"
+                    min={1}
+                  />
+                </div>
+              </div>
+              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                Exécute l’export et écrase le fichier toutes les X secondes si un chemin est défini. Le processus saute les runs si un export est déjà en cours.
+              </p>
+            </div>
+
             <Button
               color="primary"
               startContent={<FontAwesomeIcon icon={faDownload} />}
               onPress={handleExport}
-              isDisabled={isRunning || !outputPath.trim()}
+              isDisabled={isRunning || autoEnabled}
               isLoading={isRunning}
               className="bg-(--button-primary-bg) text-white"
             >
