@@ -319,3 +319,244 @@ pub async fn export_ordre_fabrication_dat(
         rows: row_count,
     })
 }
+
+#[tauri::command]
+pub async fn export_ateis_produit_dat(
+    state: State<'_, DbState>,
+    output_path: String,
+) -> Result<ExportDatResult, String> {
+    if output_path.trim().is_empty() {
+        return Err("Chemin de sortie manquant".to_string());
+    }
+
+    let cfg = get_sql_server_config(state.clone()).await?;
+    let mut client = connect_sql_server(cfg).await?;
+
+    let query = get_or_init_sql_query(
+        &state.pool,
+        "ATEIS_PRODUIT",
+        crate::commands::sql_queries::DEFAULT_ATEIS_PRODUIT_QUERY,
+    )
+    .await?;
+
+    let mut stream = client
+        .query(query.as_str(), &[])
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let out_path = Path::new(&output_path);
+    if let Some(parent) = out_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+    }
+
+    let tmp_path = out_path.with_extension("tmp");
+    let tmp_file = fs::File::create(&tmp_path).map_err(|e| e.to_string())?;
+    let mut writer = BufWriter::new(tmp_file);
+
+    let mut row_count: i64 = 0;
+    while let Some(item) = stream.try_next().await.map_err(|e| e.to_string())? {
+        let row = match item {
+            QueryItem::Row(r) => r,
+            _ => continue,
+        };
+
+        // Extraction helper
+        let get_str = |idx: usize| -> String {
+            row.try_get::<&str, _>(idx)
+                .ok()
+                .flatten()
+                .map(|s| s.to_string())
+                .unwrap_or_default()
+        };
+        let get_dec = |idx: usize| -> String {
+            row.try_get::<Decimal, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string())
+                .or_else(|| {
+                    row.try_get::<f64, _>(idx)
+                        .ok()
+                        .flatten()
+                        .map(|v| v.to_string())
+                })
+                .or_else(|| {
+                    row.try_get::<i64, _>(idx)
+                        .ok()
+                        .flatten()
+                        .map(|v| v.to_string())
+                })
+                .unwrap_or_else(|| "0".to_string())
+        };
+        let get_int = |idx: usize| -> String {
+            row.try_get::<i64, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string())
+                .or_else(|| {
+                    row.try_get::<i32, _>(idx)
+                        .ok()
+                        .flatten()
+                        .map(|v| v.to_string())
+                })
+                .unwrap_or_else(|| "0".to_string())
+        };
+
+        let ean13 = get_str(0);
+        let designation = get_str(1);
+        let code_art = get_str(2);
+        let poids = get_dec(3);
+        let nb_fard_pal = get_int(4);
+        let decal_dluo = get_str(5);
+        let ean_pal = get_str(6);
+        let des_arabe = get_str(7);
+        let ean_export = get_str(8);
+
+        // ATEIS uses semicolon separated format with UTF-8
+        let line = format!(
+            "{};{};{};{};{};{};{};{};{}\r\n",
+            ean13,
+            designation,
+            code_art,
+            poids,
+            nb_fard_pal,
+            decal_dluo,
+            ean_pal,
+            des_arabe,
+            ean_export
+        );
+
+        writer
+            .write_all(line.as_bytes())
+            .map_err(|e| e.to_string())?;
+        row_count += 1;
+    }
+
+    writer.flush().map_err(|e| e.to_string())?;
+    drop(writer);
+
+    if out_path.exists() {
+        fs::remove_file(out_path).map_err(|e| e.to_string())?;
+    }
+    fs::rename(&tmp_path, out_path).map_err(|e| e.to_string())?;
+
+    Ok(ExportDatResult {
+        output_path,
+        rows: row_count,
+    })
+}
+
+#[tauri::command]
+pub async fn export_ateis_of_dat(
+    state: State<'_, DbState>,
+    output_path: String,
+) -> Result<ExportDatResult, String> {
+    use chrono::NaiveDateTime;
+    if output_path.trim().is_empty() {
+        return Err("Chemin de sortie manquant".to_string());
+    }
+
+    let cfg = get_sql_server_config(state.clone()).await?;
+    let mut client = connect_sql_server(cfg).await?;
+
+    let query = get_or_init_sql_query(
+        &state.pool,
+        "ATEIS_OF",
+        crate::commands::sql_queries::DEFAULT_ATEIS_OF_QUERY,
+    )
+    .await?;
+
+    let mut stream = client
+        .query(query.as_str(), &[])
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let out_path = Path::new(&output_path);
+    if let Some(parent) = out_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+    }
+
+    let tmp_path = out_path.with_extension("tmp");
+    let tmp_file = fs::File::create(&tmp_path).map_err(|e| e.to_string())?;
+    let mut writer = BufWriter::new(tmp_file);
+
+    let mut row_count: i64 = 0;
+    while let Some(item) = stream.try_next().await.map_err(|e| e.to_string())? {
+        let row = match item {
+            QueryItem::Row(r) => r,
+            _ => continue,
+        };
+
+        // Helper to format date as YYYYMMDD
+        let get_date_fmt = |idx: usize| -> String {
+            let dt_opt = row
+                .try_get::<NaiveDateTime, _>(idx)
+                .ok()
+                .flatten()
+                .map(|dt| dt.date())
+                .or_else(|| row.try_get::<chrono::NaiveDate, _>(idx).ok().flatten());
+            format_date_yyyymmdd(dt_opt)
+        };
+
+        let mfgnum: String = row
+            .try_get::<&str, _>(0)
+            .ok()
+            .flatten()
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+        let yligneof: String = row
+            .try_get::<i32, _>(1)
+            .ok()
+            .flatten()
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        let itmref: String = row
+            .try_get::<&str, _>(2)
+            .ok()
+            .flatten()
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+        let extqty: String = row
+            .try_get::<Decimal, _>(3)
+            .ok()
+            .flatten()
+            .map(|v| v.to_string())
+            .or_else(|| {
+                row.try_get::<f64, _>(3)
+                    .ok()
+                    .flatten()
+                    .map(|v| v.to_string())
+            })
+            .unwrap_or_else(|| "0".to_string());
+        let desc = ""; // Blank column 4
+        let strdat = get_date_fmt(5);
+        let enddat = get_date_fmt(6);
+
+        // Output line: Numero;NumeroLigne;CodeArt;Quantite;Description;DateFin;DateDebut
+        let line = format!(
+            "{};{};{};{};{};{};{}\r\n",
+            mfgnum, yligneof, itmref, extqty, desc, enddat, strdat
+        );
+
+        writer
+            .write_all(line.as_bytes())
+            .map_err(|e| e.to_string())?;
+        row_count += 1;
+    }
+
+    writer.flush().map_err(|e| e.to_string())?;
+    drop(writer);
+
+    if out_path.exists() {
+        fs::remove_file(out_path).map_err(|e| e.to_string())?;
+    }
+    fs::rename(&tmp_path, out_path).map_err(|e| e.to_string())?;
+
+    Ok(ExportDatResult {
+        output_path,
+        rows: row_count,
+    })
+}

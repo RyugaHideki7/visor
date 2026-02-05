@@ -121,6 +121,37 @@ WHERE MFG.MFGFCY_0 LIKE 'IFR%'
 ORDER BY MFG.STRDAT_0 DESC
 "#;
 
+pub(crate) const DEFAULT_ATEIS_PRODUIT_QUERY: &str = r#"SELECT 
+    EANCOD_0 as EAN13_Fardeau,
+    ITMDES1_0 as Designation,
+    ITMREF_0 as CodeArt,
+    ITMWEI_0 as PoidsFardeau, 
+    YPPL_0 AS NbFardeauxPal,
+    YCDLUO_0 as DecalDLUO,
+    YCODBAR_0 as EAN_Palette, 
+    ZDESARA_0 as DesignArabe,
+    YEANBTS_0 AS EAN_Palette_Export
+FROM ITHRI.ITMMASTER
+WHERE ITMREF_0 LIKE 'PF%' AND ITMSTA_0 <> 6
+ORDER BY ITMREF_0
+"#;
+
+pub(crate) const DEFAULT_ATEIS_OF_QUERY: &str = r#"SELECT 
+    MFG.MFGNUM_0, 
+    MFG.YLIGNEOF_0, 
+    MFI.ITMREF_0, 
+    MFG.EXTQTY_0, 
+    '', 
+    MFG.STRDAT_0, 
+    MFG.ENDDAT_0
+FROM ITHRI.MFGHEAD MFG
+INNER JOIN ITHRI.MFGITM MFI ON MFG.MFGNUM_0 = MFI.MFGNUM_0
+WHERE MFG.MFGFCY_0 like 'IFR%' 
+    AND MFI.ITMREF_0 like 'PF%'
+    AND DATEDIFF(day, MFG.STRDAT_0, getdate()) < 40
+ORDER BY MFG.STRDAT_0 DESC
+"#;
+
 pub(crate) async fn get_or_init_sql_query(
     pool: &Pool<Sqlite>,
     format_name: &str,
@@ -137,14 +168,22 @@ pub(crate) async fn get_or_init_sql_query(
         return Ok(existing);
     }
 
-    sqlx::query("INSERT INTO sql_queries (format_name, query_template) VALUES (?, ?)")
+    let _ = sqlx::query("INSERT INTO sql_queries (format_name, query_template) VALUES (?, ?) ON CONFLICT(format_name) DO NOTHING")
         .bind(format_name)
         .bind(default_query)
         .execute(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await;
 
-    Ok(default_query.to_string())
+    // Fetch again to be sure we return what's in DB (in case another thread inserted it)
+    let final_val = sqlx::query_scalar::<_, String>(
+        "SELECT query_template FROM sql_queries WHERE format_name = ?",
+    )
+    .bind(format_name)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(final_val)
 }
 
 #[tauri::command]
@@ -190,6 +229,10 @@ pub async fn get_sql_query(
         "LOGITRON_ORDRE_FABRICATION" => {
             get_or_init_sql_query(&state.pool, &fname, DEFAULT_ORDRE_FABRICATION_QUERY).await
         }
+        "ATEIS_PRODUIT" => {
+            get_or_init_sql_query(&state.pool, &fname, DEFAULT_ATEIS_PRODUIT_QUERY).await
+        }
+        "ATEIS_OF" => get_or_init_sql_query(&state.pool, &fname, DEFAULT_ATEIS_OF_QUERY).await,
         _ => get_or_init_sql_query(&state.pool, &fname, "").await,
     }
 }
@@ -200,6 +243,8 @@ pub async fn reset_sql_query(state: State<'_, DbState>, format_name: String) -> 
     let default = match fname.as_str() {
         "LOGITRON_PRODUIT" => DEFAULT_LOGITRON_PRODUIT_QUERY,
         "LOGITRON_ORDRE_FABRICATION" => DEFAULT_ORDRE_FABRICATION_QUERY,
+        "ATEIS_PRODUIT" => DEFAULT_ATEIS_PRODUIT_QUERY,
+        "ATEIS_OF" => DEFAULT_ATEIS_OF_QUERY,
         "ATEIS" => DEFAULT_ATEIS_QUERY,
         "LOGITRON" => DEFAULT_LOGITRON_QUERY,
         _ => "",

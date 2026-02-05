@@ -619,19 +619,6 @@ impl StockProcessor {
     }
 }
 
-fn parse_last_file_date(ts: &str) -> Option<chrono::NaiveDate> {
-    if let Ok(parsed) = chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %H:%M:%S") {
-        return Some(parsed.date());
-    }
-    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(ts) {
-        return Some(dt.date_naive());
-    }
-    if let Ok(d) = chrono::NaiveDate::parse_from_str(ts, "%Y-%m-%d") {
-        return Some(d);
-    }
-    None
-}
-
 fn get_parameter_value(param: &str, line_config: &Option<LineConfig>) -> String {
     let config = match line_config {
         Some(c) => c,

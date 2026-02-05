@@ -64,7 +64,20 @@ export const SIDEBAR_MENU: SidebarItem[] = [
         key: "data-exchange-ateis",
         label: "Ateis",
         icon: faNetworkWired,
-        href: "/data-exchange/ateis",
+        children: [
+          {
+            key: "data-exchange-ateis-produit",
+            label: "Produit",
+            icon: faBoxOpen,
+            href: "/data-exchange/ateis/produit",
+          },
+          {
+            key: "data-exchange-ateis-of",
+            label: "OF",
+            icon: faListCheck,
+            href: "/data-exchange/ateis/of",
+          },
+        ],
       },
     ],
   },

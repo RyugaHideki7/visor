@@ -90,6 +90,8 @@ pub fn run_app() {
             crate::commands::sql_server::test_sql_server_connection,
             crate::commands::exports::export_logitron_produit_dat,
             crate::commands::exports::export_ordre_fabrication_dat,
+            crate::commands::exports::export_ateis_produit_dat,
+            crate::commands::exports::export_ateis_of_dat,
             crate::commands::sql_queries::get_sql_query,
             crate::commands::sql_queries::reset_sql_query,
             crate::commands::lines::toggle_line_active,
