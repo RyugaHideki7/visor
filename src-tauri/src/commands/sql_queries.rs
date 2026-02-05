@@ -25,6 +25,87 @@ pub(crate) const DEFAULT_LOGITRON_PRODUIT_QUERY: &str = r#"SELECT
     ORDER BY ITMREF_0
 "#;
 
+pub(crate) const DEFAULT_ATEIS_QUERY: &str = r#"INSERT INTO ITHRI.YINTDECL (
+    YSSCC_0, 
+    YDATE_0, 
+    YHEURE_0,     
+    ITMREF_0, 
+    LOT_0, 
+    QTY_0,
+    YDATDL_0, 
+    YNLIGN_0,
+    MFGNUM_0, 
+    YCODEPOT_0,
+    YPALETTE_0,
+    YINTERCAL_0,
+    FCY_0, 
+    UOM_0,
+    YFLGDEC_0, 
+    CREUSR_0,
+    CREDATTIM_0,
+    UPDDATTIM_0 
+  
+) VALUES (
+    @P1, 
+    @P2,
+    @P3,  
+    @P4,
+    @P5, 
+    @P6, 
+    @P7,
+    @P8,
+    @P9, 
+    @P10, 
+    @P11, 
+    @P12, 
+    @P13, 
+    @P14, 
+    @P15,
+    @P16,
+    @P17, 
+    getdate()
+)"#;
+
+pub(crate) const DEFAULT_LOGITRON_QUERY: &str = r#"INSERT INTO ITHRI.YINTDECL (
+    YSSCC_0, 
+    YDATE_0, 
+    YHEURE_0, 
+    CREDATTIM_0,      
+    ITMREF_0, 
+    LOT_0, 
+    QTY_0,
+    YDATDL_0, 
+    YNLIGN_0,
+    MFGNUM_0, 
+    YCODEPOT_0,
+    YPALETTE_0,
+    YINTERCAL_0,
+    FCY_0, 
+    UOM_0,
+    YFLGDEC_0, 
+    CREUSR_0,
+    UPDDATTIM_0 
+  
+) VALUES (
+    @P1, 
+    @P2,
+    @P3,  
+    @P4,
+    @P5, 
+    @P6, 
+    @P7,
+    @P8,
+    @P9, 
+    @P10, 
+    @P11, 
+    @P12, 
+    @P13, 
+    @P14, 
+    @P15,
+    @P16,
+    @P17, getdate()
+)"#;
+
 pub(crate) async fn get_or_init_sql_query(
     pool: &Pool<Sqlite>,
     format_name: &str,
@@ -82,7 +163,10 @@ pub async fn save_sql_query(
 }
 
 #[tauri::command]
-pub async fn get_sql_query(state: State<'_, DbState>, format_name: String) -> Result<String, String> {
+pub async fn get_sql_query(
+    state: State<'_, DbState>,
+    format_name: String,
+) -> Result<String, String> {
     let fname = format_name.to_uppercase();
     match fname.as_str() {
         "LOGITRON_PRODUIT" => {
@@ -97,6 +181,8 @@ pub async fn reset_sql_query(state: State<'_, DbState>, format_name: String) -> 
     let fname = format_name.to_uppercase();
     let default = match fname.as_str() {
         "LOGITRON_PRODUIT" => DEFAULT_LOGITRON_PRODUIT_QUERY,
+        "ATEIS" => DEFAULT_ATEIS_QUERY,
+        "LOGITRON" => DEFAULT_LOGITRON_QUERY,
         _ => "",
     };
 

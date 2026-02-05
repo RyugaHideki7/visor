@@ -478,29 +478,10 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
     .await?;
 
     // Insert default SQL queries for ATEIS and LOGITRON formats
-    let default_ateis_query = r#"INSERT INTO ITHRITEST.YINTDECL (
-    YSSCC_0, YDATE_0, YHEURE_0, ITMREF_0, LOT_0, 
-    QTY_0, YDATDL_0, YNLIGN_0, MFGNUM_0, YCODEPOT_0, 
-    YPALETTE_0, YINTERCAL_0, FCY_0, UOM_0, YFLGDEC_0, 
-    CREUSR_0, CREDATTIM_0
-) VALUES (
-    @P1, @P2, @P3, @P4, @P5, 
-    @P6, @P7, @P8, @P9, @P10, 
-    @P11, @P12, @P13, @P14, @P15, 
-    @P16, @P17
-)"#;
+    // Use centralized defaults from commands module
+    let default_ateis_query = crate::commands::sql_queries::DEFAULT_ATEIS_QUERY;
 
-    let default_logitron_query = r#"INSERT INTO ITHRITEST.YINTDECL (
-    MFGNUM_0, FCY_0, ITMREF_0, QTY_0, UOM_0, 
-    YSSCC_0, YFLGDEC_0, LOT_0, CREDATTIM_0, 
-    CREUSR_0, YDATE_0, YHEURE_0, YNLIGN_0, 
-    YDATDL_0, YCODEPOT_0, YPALETTE_0, YINTERCAL_0
-) VALUES (
-    @P1, @P2, @P3, @P4, @P5, 
-    @P6, @P7, @P8, @P9, 
-    @P10, @P11, @P12, @P13, 
-    @P14, @P15, @P16, @P17
-)"#;
+    let default_logitron_query = crate::commands::sql_queries::DEFAULT_LOGITRON_QUERY;
 
     let _ = sqlx::query(
         "DELETE FROM sql_queries 

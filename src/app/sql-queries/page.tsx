@@ -72,10 +72,15 @@ export default function SqlQueriesPage() {
     }
   };
 
-  const handleReset = () => {
-    const selected = queries.find(q => q.format_name === selectedFormat);
-    if (selected) {
-      setCurrentQuery(selected.query_template);
+  const handleReset = async () => {
+    try {
+      await invoke("reset_sql_query", { formatName: selectedFormat });
+      await fetchQueries();
+      setSaveStatus("Requête réinitialisée par défaut");
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (error) {
+      console.error("Failed to reset query:", error);
+      setSaveStatus("Erreur lors de la réinitialisation");
     }
   };
 
