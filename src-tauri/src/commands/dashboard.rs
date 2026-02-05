@@ -41,10 +41,12 @@ pub async fn get_dashboard_snapshot(state: State<'_, DbState>) -> Result<Vec<Das
         .await
         .map_err(|e| e.to_string())?;
 
+        let today_prefix = Local::now().format("%Y-%m-%d").to_string() + "%";
         let total_processed: i64 = sqlx::query_scalar(
-            "SELECT COUNT(1) FROM production_data WHERE line_id = ? AND status = 'SUCCESS'",
+            "SELECT COUNT(1) FROM production_data WHERE line_id = ? AND status = 'SUCCESS' AND processed_at LIKE ?",
         )
         .bind(id)
+        .bind(today_prefix)
         .fetch_one(&state.pool)
         .await
         .map_err(|e| e.to_string())?;

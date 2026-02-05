@@ -28,9 +28,11 @@ pub struct Line {
     pub created_at: Option<String>,
 }
 
+use chrono::Local;
+
 #[tauri::command]
 pub async fn get_lines(state: State<'_, DbState>) -> Result<Vec<Line>, String> {
-    let lines = sqlx::query_as::<_, Line>(
+    let mut lines = sqlx::query_as::<_, Line>(
         "SELECT id, name, path, prefix, interval_check, interval_alert, archived_path, rejected_path, active, \
                 site, unite, flag_dec, code_ligne, log_path, file_format,\
                 total_traites, total_erreurs, last_file_time, etat_actuel, created_at \
@@ -39,6 +41,28 @@ pub async fn get_lines(state: State<'_, DbState>) -> Result<Vec<Line>, String> {
     .fetch_all(&state.pool)
     .await
     .map_err(|e| e.to_string())?;
+
+    let today = Local::now().date_naive();
+
+    for line in &mut lines {
+        let should_reset = if let Some(last_time_str) = &line.last_file_time {
+            // Attempt to parse existing timestamp
+            if let Ok(last_dt) = chrono::NaiveDateTime::parse_from_str(last_time_str, "%Y-%m-%d %H:%M:%S") {
+                last_dt.date() != today
+            } else {
+                // If format invalid, reset just in case
+                true
+            }
+        } else {
+            // No last time = no files processed today (effectively)
+            true
+        };
+
+        if should_reset {
+            line.total_traites = Some(0);
+            line.total_erreurs = Some(0);
+        }
+    }
 
     Ok(lines)
 }
