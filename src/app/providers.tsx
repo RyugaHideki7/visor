@@ -12,6 +12,8 @@ import { faCircle as faCircleRegular } from "@fortawesome/free-regular-svg-icons
 import { faGithub, faTwitter } from "@fortawesome/free-brands-svg-icons";
 import "@fortawesome/fontawesome-svg-core/styles.css";
 import type { PropsWithChildren } from "react";
+import { useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SidebarProvider } from "@/shared/contexts/sidebar";
 import { ThemeProvider } from "@/shared/contexts/theme";
 import { Sidebar } from "@/shared/ui/Sidebar";
@@ -29,24 +31,28 @@ library.add(
 );
 
 export function Providers({ children }: PropsWithChildren) {
+  const [queryClient] = useState(() => new QueryClient());
+
   return (
-    <HeroUIProvider>
-      <ThemeProvider>
-        <SidebarProvider>
-          <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
-            <Titlebar />
-            <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
-              <Sidebar />
-              <div
-                className="app-scroll"
-                style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg-primary)" }}
-              >
-                {children}
+    <QueryClientProvider client={queryClient}>
+      <HeroUIProvider>
+        <ThemeProvider>
+          <SidebarProvider>
+            <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
+              <Titlebar />
+              <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
+                <Sidebar />
+                <div
+                  className="app-scroll"
+                  style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg-primary)" }}
+                >
+                  {children}
+                </div>
               </div>
             </div>
-          </div>
-        </SidebarProvider>
-      </ThemeProvider>
-    </HeroUIProvider>
+          </SidebarProvider>
+        </ThemeProvider>
+      </HeroUIProvider>
+    </QueryClientProvider>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faExclamationTriangle, faArrowUp, faArrowDown } from "@fortawesome/free-solid-svg-icons";
 import { invoke } from "@tauri-apps/api/core";
@@ -32,40 +33,16 @@ const statusClassMap: Record<string, string> = {
 };
 
 export default function Dashboard() {
-    const [lineStatuses, setLineStatuses] = useState<LineStatus[]>([]);
+    const { data: lineStatuses = [] } = useQuery({
+        queryKey: ["lineStatuses"],
+        queryFn: () => invoke<LineStatus[]>("get_dashboard_snapshot"),
+        refetchInterval: 30000,
+    });
+
     const [page, setPage] = useState(1);
     const rowsPerPage = 20;
     const [siteFilter, setSiteFilter] = useState<string>("ALL");
     const [sortAsc, setSortAsc] = useState<boolean>(true);
-
-    const fetchStatus = async () => {
-        try {
-            const snapshot = await invoke<LineStatus[]>("get_dashboard_snapshot");
-            setLineStatuses(snapshot);
-        } catch (error) {
-            console.error("Dashboard fetch error:", error);
-        }
-    };
-
-    useEffect(() => {
-        fetchStatus();
-        const interval = setInterval(fetchStatus, 30000);
-        const onFocus = () => fetchStatus();
-        const onVisibility = () => {
-            if (document.visibilityState === "visible") {
-                fetchStatus();
-            }
-        };
-
-        window.addEventListener("focus", onFocus);
-        document.addEventListener("visibilitychange", onVisibility);
-
-        return () => {
-            clearInterval(interval);
-            window.removeEventListener("focus", onFocus);
-            document.removeEventListener("visibilitychange", onVisibility);
-        };
-    }, []);
 
     const sites = useMemo(() => {
         const unique = Array.from(

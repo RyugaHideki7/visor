@@ -502,6 +502,24 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
     @P14, @P15, @P16, @P17
 )"#;
 
+    let _ = sqlx::query(
+        "DELETE FROM sql_queries 
+         WHERE id NOT IN (
+            SELECT MIN(id) 
+            FROM sql_queries 
+            GROUP BY format_name
+         )"
+    )
+    .execute(&pool)
+    .await;
+
+    let _ = sqlx::query(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_sql_queries_format_name ON sql_queries(format_name)"
+    )
+    .execute(&pool)
+    .await;
+
+    // 3. Now safe to insert defaults using INSERT OR IGNORE
     sqlx::query(
         "INSERT OR IGNORE INTO sql_queries (format_name, query_template) VALUES ('ATEIS', ?)",
     )
@@ -515,6 +533,26 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
     .bind(default_logitron_query)
     .execute(&pool)
     .await?;
+
+    // Version check: Disable SQL Server if version changed
+    let current_version = app_handle.package_info().version.to_string();
+    let stored_version: Option<String> = sqlx::query_scalar("SELECT value FROM config WHERE key = 'last_version'")
+        .fetch_optional(&pool)
+        .await
+        .unwrap_or(None);
+
+    if stored_version.as_deref() != Some(&current_version) {
+        // Version mismatch (update or first run) -> Disable SQL Server
+        let _ = sqlx::query("UPDATE sql_server_config SET enabled = 0 WHERE id = 1")
+            .execute(&pool)
+            .await;
+        
+        // Update stored version
+        let _ = sqlx::query("INSERT OR REPLACE INTO config (key, value) VALUES ('last_version', ?)")
+            .bind(&current_version)
+            .execute(&pool)
+            .await;
+    }
 
     Ok(pool)
 }
