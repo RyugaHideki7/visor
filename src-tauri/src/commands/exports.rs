@@ -176,10 +176,6 @@ fn format_date_yyyymmdd(date: Option<chrono::NaiveDate>) -> String {
         .unwrap_or_default()
 }
 
-fn format_number(value: Option<String>) -> String {
-    value.unwrap_or_else(|| "0".to_string())
-}
-
 #[tauri::command]
 pub async fn export_ordre_fabrication_dat(
     state: State<'_, DbState>,

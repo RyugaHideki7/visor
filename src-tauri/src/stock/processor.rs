@@ -37,7 +37,13 @@ fn parse_insert_columns(query: &str) -> Vec<String> {
 
     query[open + 1..close]
         .split(',')
-        .map(|s| s.trim().trim_matches('[').trim_matches(']').trim().to_string())
+        .map(|s| {
+            s.trim()
+                .trim_matches('[')
+                .trim_matches(']')
+                .trim()
+                .to_string()
+        })
         .filter(|s| !s.is_empty())
         .collect()
 }
@@ -105,7 +111,11 @@ impl DiskLogger {
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
         let entry = format!("[{}] [{}] {}\n", timestamp, log_type, message);
 
-        if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(&log_file) {
+        if let Ok(mut file) = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_file)
+        {
             let _ = std::io::Write::write_all(&mut file, entry.as_bytes());
         }
     }
@@ -141,7 +151,11 @@ impl DiskLogger {
         let mut entry = format!("\n[{}] [{}]\n", timestamp, status);
         entry.push_str(&format!(
             "Requête: {}\n",
-            if query.len() > 500 { &query[..500] } else { query }
+            if query.len() > 500 {
+                &query[..500]
+            } else {
+                query
+            }
         ));
         entry.push_str(&format!("Valeurs: {}\n", values));
         if !success && !error_msg.is_empty() {
@@ -150,7 +164,11 @@ impl DiskLogger {
         entry.push_str(&"-".repeat(80));
         entry.push('\n');
 
-        if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(&sql_log_file) {
+        if let Ok(mut file) = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&sql_log_file)
+        {
             let _ = std::io::Write::write_all(&mut file, entry.as_bytes());
         }
     }
@@ -294,51 +312,17 @@ impl StockProcessor {
 
     async fn update_line_stats(&self, line_id: i64, success: bool) {
         let now_dt = Local::now();
-        let today = now_dt.date_naive();
         let now_str = now_dt.format("%Y-%m-%d %H:%M:%S").to_string();
-
-        let mut total_traites: i64 = 0;
-        let mut total_erreurs: i64 = 0;
-        let mut last_date: Option<chrono::NaiveDate> = None;
-
-        if let Ok(row) = sqlx::query(
-            "SELECT COALESCE(total_traites, 0) as total_traites, COALESCE(total_erreurs, 0) as total_erreurs, last_file_time FROM lines WHERE id = ?",
-        )
-        .bind(line_id)
-        .fetch_one(&self.pool)
-        .await
-        {
-            total_traites = row.get::<i64, _>("total_traites");
-            total_erreurs = row.get::<i64, _>("total_erreurs");
-            let ts: Option<String> = row.try_get::<Option<String>, _>("last_file_time").ok().flatten();
-            if let Some(ts) = ts {
-                last_date = parse_last_file_date(&ts);
-            }
-        }
-
-        if last_date.map(|d| d != today).unwrap_or(true) {
-            total_traites = 0;
-            total_erreurs = 0;
-        }
-
-        if success {
-            total_traites += 1;
-        } else {
-            total_erreurs += 1;
-        }
-
         let status = if success { "MARCHE" } else { "ERREUR" };
 
-        let _ = sqlx::query(
-            "UPDATE lines SET total_traites = ?, total_erreurs = ?, last_file_time = ?, etat_actuel = ? WHERE id = ?",
-        )
-        .bind(total_traites)
-        .bind(total_erreurs)
-        .bind(now_str)
-        .bind(status)
-        .bind(line_id)
-        .execute(&self.pool)
-        .await;
+        // We no longer update total_traites/total_erreurs columns in the lines table
+        // as they are calculated dynamically from production_data history
+        let _ = sqlx::query("UPDATE lines SET last_file_time = ?, etat_actuel = ? WHERE id = ?")
+            .bind(now_str)
+            .bind(status)
+            .bind(line_id)
+            .execute(&self.pool)
+            .await;
     }
 
     async fn add_db_log(
@@ -377,7 +361,8 @@ impl StockProcessor {
         let filename = path.file_name().unwrap().to_str().unwrap().to_string();
 
         let upper = filename.to_uppercase();
-        let allowed_ext = upper.ends_with(".TMP") || upper.ends_with(".CSV") || upper.ends_with(".TXT");
+        let allowed_ext =
+            upper.ends_with(".TMP") || upper.ends_with(".CSV") || upper.ends_with(".TXT");
         if !upper.contains(&prefix.to_uppercase()) || !allowed_ext {
             return Ok(());
         }
@@ -417,7 +402,11 @@ impl StockProcessor {
         let temp_subdir = source_parent.join("visor_temp");
 
         if let Err(e) = tokio::fs::create_dir_all(&temp_subdir).await {
-            let msg = format!("Impossible de créer dossier temp {}: {}", temp_subdir.display(), e);
+            let msg = format!(
+                "Impossible de créer dossier temp {}: {}",
+                temp_subdir.display(),
+                e
+            );
             DiskLogger::log_ligne(&line_name, &log_path, &msg, "ERROR");
             self.add_db_log(line_id, "ERROR", "FileProcessor", &msg, None)
                 .await;
@@ -513,7 +502,8 @@ impl StockProcessor {
                     false,
                     &msg,
                 );
-                self.add_db_log(line_id, "ERROR", "SQLServer", &msg, None).await;
+                self.add_db_log(line_id, "ERROR", "SQLServer", &msg, None)
+                    .await;
                 self.update_line_stats(line_id, false).await;
                 had_error = true;
                 error_msg = Some(msg);
