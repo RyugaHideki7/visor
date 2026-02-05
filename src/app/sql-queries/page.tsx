@@ -143,6 +143,8 @@ export default function SqlQueriesPage() {
           >
             <Tab key="ATEIS" title="Format ATEIS" />
             <Tab key="LOGITRON" title="Format LOGITRON" />
+            <Tab key="LOGITRON_PRODUIT" title="Logitron Produit" />
+            <Tab key="LOGITRON_ORDRE_FABRICATION" title="Ordre Fabrication" />
           </Tabs>
         </CardHeader>
         <Divider />

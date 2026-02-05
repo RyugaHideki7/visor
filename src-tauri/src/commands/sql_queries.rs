@@ -106,6 +106,21 @@ pub(crate) const DEFAULT_LOGITRON_QUERY: &str = r#"INSERT INTO ITHRI.YINTDECL (
     @P17, getdate()
 )"#;
 
+pub(crate) const DEFAULT_ORDRE_FABRICATION_QUERY: &str = r#"SELECT 
+    MFG.MFGNUM_0, 
+    MFI.ITMREF_0,           
+    MFG.EXTQTY_0, 
+    MFG.STRDAT_0,
+    '', 
+    MFG.YLIGNEOF_0 
+FROM ITHRI.MFGHEAD MFG
+INNER JOIN ITHRI.MFGITM MFI ON MFG.MFGNUM_0 = MFI.MFGNUM_0
+WHERE MFG.MFGFCY_0 LIKE 'IFR%' 
+    AND MFI.ITMREF_0 LIKE 'PF%'
+    AND DATEDIFF(day, MFG.STRDAT_0, getdate()) < 40
+ORDER BY MFG.STRDAT_0 DESC
+"#;
+
 pub(crate) async fn get_or_init_sql_query(
     pool: &Pool<Sqlite>,
     format_name: &str,
@@ -172,6 +187,9 @@ pub async fn get_sql_query(
         "LOGITRON_PRODUIT" => {
             get_or_init_sql_query(&state.pool, &fname, DEFAULT_LOGITRON_PRODUIT_QUERY).await
         }
+        "LOGITRON_ORDRE_FABRICATION" => {
+            get_or_init_sql_query(&state.pool, &fname, DEFAULT_ORDRE_FABRICATION_QUERY).await
+        }
         _ => get_or_init_sql_query(&state.pool, &fname, "").await,
     }
 }
@@ -181,6 +199,7 @@ pub async fn reset_sql_query(state: State<'_, DbState>, format_name: String) -> 
     let fname = format_name.to_uppercase();
     let default = match fname.as_str() {
         "LOGITRON_PRODUIT" => DEFAULT_LOGITRON_PRODUIT_QUERY,
+        "LOGITRON_ORDRE_FABRICATION" => DEFAULT_ORDRE_FABRICATION_QUERY,
         "ATEIS" => DEFAULT_ATEIS_QUERY,
         "LOGITRON" => DEFAULT_LOGITRON_QUERY,
         _ => "",
