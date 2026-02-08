@@ -35,7 +35,6 @@ export default function AteisOfPage() {
       }
     };
 
-    // load saved path
     const savedPath = localStorage.getItem("ateis_of_output_path");
     if (savedPath) {
       setOutputPath(savedPath);
@@ -75,8 +74,8 @@ export default function AteisOfPage() {
     if (!Number.isFinite(autoIntervalSec) || autoIntervalSec <= 0) return;
 
     const id = setInterval(() => {
-      if (isRunning) return; // avoid overlapping runs
-      const pathToUse = outputPath.trim().length > 0 ? outputPath : "ordre_fabrication.dat";
+      if (isRunning) return;
+      const pathToUse = outputPath.trim().length > 0 ? outputPath : "of.dat";
       if (!pathToUse.trim()) return;
       handleExport();
     }, autoIntervalSec * 1000);
@@ -90,7 +89,7 @@ export default function AteisOfPage() {
     setResult(null);
     setExportStatus(null);
 
-    const pathToUse = outputPath.trim().length > 0 ? outputPath : "ordre_fabrication.dat";
+    const pathToUse = outputPath.trim().length > 0 ? outputPath : "of.dat";
 
     try {
       const res = await invoke<ExportDatResult>("export_ateis_of_dat", {
@@ -145,7 +144,7 @@ export default function AteisOfPage() {
           Data exchange · Ateis · OF
         </h1>
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-          Génère le fichier CSV (séparateur point-virgule) pour les Ordres de Fabrication.
+          Génère le fichier CSV (séparateur point-virgule) <code>of.dat</code> depuis SQL Server.
         </p>
       </div>
 
@@ -165,7 +164,7 @@ export default function AteisOfPage() {
       </Tabs>
 
       {activeTab === "export" && (
-        <Card className="bg-(--bg-secondary) border border-(--border-default)">
+        <Card className="bg-[var(--bg-secondary)] border border-[var(--border-default)]">
           <CardHeader className="flex flex-col gap-1">
             <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
               Export
@@ -181,7 +180,7 @@ export default function AteisOfPage() {
               labelPlacement="outside"
               value={outputPath}
               onValueChange={setOutputPath}
-              placeholder="Ex: ...\\ordre_fabrication.dat"
+              placeholder="Ex: ...\\of.dat"
               endContent={
                 <Button
                   isIconOnly
@@ -189,14 +188,14 @@ export default function AteisOfPage() {
                   size="sm"
                   onPress={async () => {
                     const selected = await save({
-                      defaultPath: (outputPath && outputPath.trim()) || "ordre_fabrication.dat",
+                      defaultPath: (outputPath && outputPath.trim()) || "of.dat",
                       filters: [{ name: "DAT", extensions: ["dat"] }],
                     });
                     if (selected) {
                       setOutputPath(selected as string);
                     }
                   }}
-                  className="text-(--text-secondary)"
+                  className="text-[var(--text-secondary)]"
                 >
                   <FontAwesomeIcon icon={faFolderOpen} />
                 </Button>
@@ -208,7 +207,7 @@ export default function AteisOfPage() {
               }}
             />
 
-            <div className="border border-(--border-default) rounded-lg p-4 bg-(--bg-tertiary) flex flex-col gap-2">
+            <div className="border border-[var(--border-default)] rounded-lg p-4 bg-[var(--bg-tertiary)] flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-4 justify-between">
                 <div className="flex items-center gap-3">
                   <Switch isSelected={autoEnabled} onValueChange={setAutoEnabled}>
@@ -230,7 +229,7 @@ export default function AteisOfPage() {
                 </div>
               </div>
               <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                Exécute l’export et écrase le fichier toutes les X secondes si un chemin est défini. Le processus saute les runs si un export est déjà en cours.
+                Exécute l'export et écrase le fichier toutes les X secondes si un chemin est défini. Le processus saute les runs si un export est déjà en cours.
               </p>
             </div>
 
@@ -240,19 +239,19 @@ export default function AteisOfPage() {
               onPress={handleExport}
               isDisabled={isRunning || autoEnabled}
               isLoading={isRunning}
-              className="bg-(--button-primary-bg) text-white"
+              className="bg-[var(--button-primary-bg)] text-white"
             >
               {isRunning ? "Export en cours..." : "Exporter"}
             </Button>
 
             {exportStatus && (
-              <div className="px-4 py-2 rounded-lg text-sm bg-(--color-success-bg) text-(--color-success)">
+              <div className="px-4 py-2 rounded-lg text-sm bg-[var(--color-success-bg)] text-[var(--color-success)]">
                 {exportStatus}
               </div>
             )}
 
             {error && (
-              <div className="px-4 py-2 rounded-lg text-sm bg-(--color-error-bg) text-(--color-error)">
+              <div className="px-4 py-2 rounded-lg text-sm bg-[var(--color-error-bg)] text-[var(--color-error)]">
                 Erreur: {error}
               </div>
             )}
@@ -261,14 +260,14 @@ export default function AteisOfPage() {
       )}
 
       {activeTab === "sql" && (
-        <Card className="bg-(--bg-secondary) border border-(--border-default)">
+        <Card className="bg-[var(--bg-secondary)] border border-[var(--border-default)]">
           <CardHeader className="flex justify-between items-start gap-4">
             <div className="flex flex-col gap-1">
               <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
                 Requête SQL (Ateis · OF)
               </h2>
               <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                Modifiez puis sauvegardez. L’export utilisera cette requête.
+                Modifiez puis sauvegardez. L'export utilisera cette requête.
               </p>
             </div>
             <div className="flex gap-2">
@@ -277,7 +276,7 @@ export default function AteisOfPage() {
                 startContent={<FontAwesomeIcon icon={faRotateRight} />}
                 onPress={handleResetQuery}
                 isDisabled={isSavingQuery}
-                className="border-(--border-default) text-(--text-primary)"
+                className="border-[var(--border-default)] text-[var(--text-primary)]"
               >
                 Réinitialiser
               </Button>
@@ -286,7 +285,7 @@ export default function AteisOfPage() {
                 startContent={<FontAwesomeIcon icon={faSave} />}
                 onPress={handleSaveQuery}
                 isLoading={isSavingQuery}
-                className="bg-(--button-primary-bg) text-white"
+                className="bg-[var(--button-primary-bg)] text-white"
               >
                 Sauvegarder
               </Button>
@@ -310,8 +309,8 @@ export default function AteisOfPage() {
               <div
                 className={`px-4 py-2 rounded-lg text-sm ${
                   saveStatus.toLowerCase().includes("erreur")
-                    ? "bg-(--color-error-bg) text-(--color-error)"
-                    : "bg-(--color-success-bg) text-(--color-success)"
+                    ? "bg-[var(--color-error-bg)] text-[var(--color-error)]"
+                    : "bg-[var(--color-success-bg)] text-[var(--color-success)]"
                 }`}
               >
                 {saveStatus}
@@ -319,7 +318,7 @@ export default function AteisOfPage() {
             )}
 
             {error && (
-              <div className="px-4 py-2 rounded-lg text-sm bg-(--color-error-bg) text-(--color-error)">
+              <div className="px-4 py-2 rounded-lg text-sm bg-[var(--color-error-bg)] text-[var(--color-error)]">
                 Erreur: {error}
               </div>
             )}

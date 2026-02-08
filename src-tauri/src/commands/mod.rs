@@ -1,6 +1,7 @@
 pub mod dashboard;
 pub mod defaults;
 pub mod exports;
+pub mod hfsql;
 pub mod lines;
 pub mod logs;
 pub mod mappings;

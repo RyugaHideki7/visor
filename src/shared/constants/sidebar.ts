@@ -77,6 +77,12 @@ export const SIDEBAR_MENU: SidebarItem[] = [
             icon: faListCheck,
             href: "/data-exchange/ateis/of",
           },
+          {
+            key: "data-exchange-ateis-connexion",
+            label: "Connexion",
+            icon: faServer,
+            href: "/data-exchange/ateis/connexion",
+          }
         ],
       },
     ],

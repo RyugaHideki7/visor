@@ -126,6 +126,11 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
         .execute(&pool)
         .await;
 
+    // Migration: Add log_path to hfsql_config
+    let _ = sqlx::query("ALTER TABLE hfsql_config ADD COLUMN log_path TEXT")
+        .execute(&pool)
+        .await;
+
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS mappings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -471,8 +476,30 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
         "CREATE TABLE IF NOT EXISTS sql_queries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             format_name TEXT UNIQUE NOT NULL,
+            format_name TEXT UNIQUE NOT NULL,
             query_template TEXT NOT NULL
         )",
+    )
+    .execute(&pool)
+    .await?;
+
+    // HFSQL connection settings table (ODBC)
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS hfsql_config (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            dsn TEXT,
+            username TEXT,
+            password TEXT,
+            log_path TEXT
+        )",
+    )
+    .execute(&pool)
+    .await?;
+
+    // Insert default HFSQL config row if not exists
+    sqlx::query(
+        "INSERT OR IGNORE INTO hfsql_config (id, dsn, username, password) 
+         VALUES (1, 'HFSQL', 'Admin', '1234')",
     )
     .execute(&pool)
     .await?;
@@ -489,13 +516,13 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
             SELECT MIN(id) 
             FROM sql_queries 
             GROUP BY format_name
-         )"
+         )",
     )
     .execute(&pool)
     .await;
 
     let _ = sqlx::query(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_sql_queries_format_name ON sql_queries(format_name)"
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_sql_queries_format_name ON sql_queries(format_name)",
     )
     .execute(&pool)
     .await;
@@ -517,22 +544,24 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, Box<dyn std
 
     // Version check: Disable SQL Server if version changed
     let current_version = app_handle.package_info().version.to_string();
-    let stored_version: Option<String> = sqlx::query_scalar("SELECT value FROM config WHERE key = 'last_version'")
-        .fetch_optional(&pool)
-        .await
-        .unwrap_or(None);
+    let stored_version: Option<String> =
+        sqlx::query_scalar("SELECT value FROM config WHERE key = 'last_version'")
+            .fetch_optional(&pool)
+            .await
+            .unwrap_or(None);
 
     if stored_version.as_deref() != Some(&current_version) {
         // Version mismatch (update or first run) -> Disable SQL Server
         let _ = sqlx::query("UPDATE sql_server_config SET enabled = 0 WHERE id = 1")
             .execute(&pool)
             .await;
-        
+
         // Update stored version
-        let _ = sqlx::query("INSERT OR REPLACE INTO config (key, value) VALUES ('last_version', ?)")
-            .bind(&current_version)
-            .execute(&pool)
-            .await;
+        let _ =
+            sqlx::query("INSERT OR REPLACE INTO config (key, value) VALUES ('last_version', ?)")
+                .bind(&current_version)
+                .execute(&pool)
+                .await;
     }
 
     Ok(pool)

@@ -158,7 +158,13 @@ export default function Settings() {
     setIsTesting(true);
     setTestResult(null);
     try {
-      const res = await invoke<ConnectionTestResult>("test_sql_server_connection");
+      const res = await invoke<ConnectionTestResult>("test_sql_server_connection", {
+        server: config.server || "",
+        database: config.database || "",
+        username: config.username || "",
+        password: config.password || "",
+        enabled: config.enabled,
+      });
       setTestResult(res);
     } catch (error) {
       console.error("Failed to test SQL Server connection:", error);

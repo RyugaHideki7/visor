@@ -100,14 +100,18 @@ pub async fn save_sql_server_config(
 
 #[tauri::command]
 pub async fn test_sql_server_connection(
-    state: State<'_, DbState>,
+    server: String,
+    database: String,
+    username: String,
+    password: String,
+    enabled: bool,
 ) -> Result<ConnectionTestResult, String> {
-    let cfg = get_sql_server_config(state).await?;
-
-    let server = cfg.server.unwrap_or_default();
-    let database = cfg.database.unwrap_or_default();
-    let username = cfg.username.unwrap_or_default();
-    let password = cfg.password.unwrap_or_default();
+    if !enabled {
+        return Ok(ConnectionTestResult {
+            success: false,
+            error: Some("Connexion désactivée".to_string()),
+        });
+    }
 
     if server.trim().is_empty() {
         return Ok(ConnectionTestResult {
