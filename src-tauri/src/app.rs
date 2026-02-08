@@ -92,6 +92,7 @@ pub fn run_app() {
             crate::commands::hfsql::save_hfsql_config,
             crate::commands::hfsql::test_hfsql_connection,
             crate::commands::hfsql::sync_ateis_produit,
+            crate::commands::hfsql::sync_ateis_of,
             crate::commands::exports::export_logitron_produit_dat,
             crate::commands::exports::export_ordre_fabrication_dat,
             crate::commands::exports::export_ateis_produit_dat,

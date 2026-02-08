@@ -491,3 +491,302 @@ pub async fn sync_ateis_produit(app: AppHandle, state: State<'_, DbState>) -> Re
 
     Ok(result)
 }
+
+#[tauri::command]
+pub async fn sync_ateis_of(app: AppHandle, state: State<'_, DbState>) -> Result<ArticleSyncResult, String> {
+    use crate::commands::sql_queries::get_or_init_sql_query;
+    use crate::commands::sql_server::get_sql_server_config;
+    use tiberius::{AuthMethod, Client, Config as SqlConfig};
+    use tokio_util::compat::TokioAsyncWriteCompatExt;
+    use chrono::NaiveDateTime;
+    use rust_decimal::Decimal;
+    use rust_decimal::prelude::ToPrimitive;
+
+    // 1. Get Global SQL Server Config (Source)
+    let sql_cfg = get_sql_server_config(state.clone()).await?;
+    let sql_host = sql_cfg.server.unwrap_or_default();
+    let sql_db = sql_cfg.database.unwrap_or_default();
+    let sql_user = sql_cfg.username.unwrap_or_default();
+    let sql_pwd = sql_cfg.password.unwrap_or_default();
+
+    if sql_host.trim().is_empty() {
+        return Err("Configuration SQL Server manquante (voir Paramètres)".to_string());
+    }
+
+    // 2. Get Global HFSQL Config (Destination)
+    let hfsql_cfg = get_hfsql_config(state.clone()).await?;
+    let dsn = hfsql_cfg.dsn.unwrap_or_default();
+    let user = hfsql_cfg.username.unwrap_or_default();
+    let pwd = hfsql_cfg.password.unwrap_or_default();
+    
+    // Resolve Log Directory
+    let log_dir_base = match hfsql_cfg.log_path {
+        Some(path) if !path.is_empty() => path,
+        _ => {
+            app.path()
+                .desktop_dir()
+                .ok()
+                .map(|p| p.join("T").join("BLOG").to_string_lossy().to_string())
+                .unwrap_or_else(|| r"C:\T\BLOG".to_string())
+        }
+    };
+
+    if dsn.trim().is_empty() {
+        return Err("Configuration HFSQL globale manquante (DSN)".to_string());
+    }
+
+    // 3. Connect to SQL Server
+    let mut tiberius_config = SqlConfig::new();
+    tiberius_config.host(sql_host.as_str());
+    tiberius_config.port(1433);
+    tiberius_config.authentication(AuthMethod::sql_server(sql_user, sql_pwd));
+    tiberius_config.trust_cert();
+    if !sql_db.trim().is_empty() {
+        tiberius_config.database(sql_db);
+    }
+
+    let tcp = tokio::net::TcpStream::connect(tiberius_config.get_addr())
+        .await
+        .map_err(|e| format!("Erreur connexion SQL Server: {}", e))?;
+    tcp.set_nodelay(true).map_err(|e| e.to_string())?;
+
+    let mut sql_client = Client::connect(tiberius_config, tcp.compat_write())
+        .await
+        .map_err(|e| format!("Erreur auth SQL Server: {}", e))?;
+
+    // 4. Fetch OFs
+    let query = get_or_init_sql_query(
+        &state.pool,
+        "ATEIS_OF",
+        crate::commands::sql_queries::DEFAULT_ATEIS_OF_QUERY,
+    )
+    .await?;
+
+    let stream = sql_client.query(query, &[]).await.map_err(|e| e.to_string())?;
+    let rows = stream.into_first_result().await.map_err(|e| e.to_string())?;
+
+    let mut of_list = Vec::new();
+    for row in rows {
+        let mfg_num: &str = row.get(0).unwrap_or("");
+        let ligne_of: &str = row.get(1).unwrap_or("");
+        let itm_ref: &str = row.get(2).unwrap_or("");
+        // Robust handling for ext_qty: try f64, then fallback to Decimal
+        let ext_qty: f64 = match row.try_get::<f64, _>(3) {
+            Ok(Some(val)) => val,
+            Ok(None) => 0.0,
+            Err(_) => match row.try_get::<Decimal, _>(3) {
+                Ok(Some(d)) => d.to_f64().unwrap_or(0.0),
+                Ok(None) => 0.0,
+                Err(_) => 0.0,
+            },
+        };
+        let desc: &str = row.get(4).unwrap_or("");
+        let str_dat: Option<NaiveDateTime> = row.get(5);
+        let end_dat: Option<NaiveDateTime> = row.get(6);
+
+        // Date format YYYYMMDD as integers
+        let date_debut = str_dat.map(|d| d.format("%Y%m%d").to_string().parse::<i32>().unwrap_or(0)).unwrap_or(0);
+        let date_fin = end_dat.map(|d| d.format("%Y%m%d").to_string().parse::<i32>().unwrap_or(0)).unwrap_or(0);
+
+        of_list.push((
+            mfg_num.to_string(),
+            ligne_of.to_string(),
+            itm_ref.to_string(),
+            ext_qty,
+            desc.to_string(),
+            date_debut,
+            date_fin
+        ));
+    }
+
+    // 5. Connect to HFSQL via ODBC (Blocking)
+    let total_of = of_list.len();
+    let dsn_clone = dsn.clone();
+    let user_clone = user.clone();
+    let pwd_clone = pwd.clone();
+    let log_dir = log_dir_base.clone();
+    let app_handle = app.clone();
+
+    let result = tokio::task::spawn_blocking(move || {
+        let mut updated = 0;
+        let mut inserted = 0;
+        let mut errors = 0;
+        let mut details = Vec::new();
+
+        let log_msg = |msg: &str| {
+            let date = chrono::Local::now().format("%Y%m%d").to_string();
+            let time = chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]").to_string();
+            let filename = format!("Ateis_OF_{}.log", date);
+            let path = std::path::Path::new(&log_dir).join(filename);
+            
+            if let Some(parent) = path.parent() { let _ = std::fs::create_dir_all(parent); }
+
+            if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+                 let _ = writeln!(file, "{}{}", time, msg); 
+            }
+        };
+
+        let log_msg_inner = |msg: String| { log_msg(&msg); };
+        
+        // Log Header
+        let date = chrono::Local::now().format("%Y%m%d").to_string();
+        let path = std::path::Path::new(&log_dir).join(format!("Ateis_OF_{}.log", date));
+        if !path.exists() {
+             let header = format!(
+                "{}\n   TRANSFERT ATEIS -> HFSQL (OF)\n   Date: {}\n{}\n\n",
+                "=".repeat(50),
+                chrono::Local::now().format("%d/%m/%Y %H:%M:%S"),
+                "=".repeat(50)
+            );
+             if let Some(parent) = path.parent() { let _ = std::fs::create_dir_all(parent); }
+             if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+                 let _ = file.write_all(header.as_bytes());
+            }
+        }
+        log_msg("DEBUT DU TRANSFERT DES OF");
+        log_msg("Mode: UPSERT (UPDATE si existe, INSERT sinon)");
+        log_msg("Cle: Numero");
+        log_msg(&format!("1. Recuperation des OF depuis SQL Server...\n[OK] {} OF recuperes", of_list.len()));
+        log_msg(&format!("\n2. Traitement UPSERT de {} OF...", of_list.len()));
+
+        let env = match Environment::new() {
+            Ok(e) => e,
+            Err(e) => {
+                let err_msg = format!("Env init error: {}", e);
+                log_msg_inner(format!("[ERROR] {}", err_msg));
+                return ArticleSyncResult {
+                    total_processed: total_of as i64,
+                    updated: 0,
+                    inserted: 0,
+                    errors: total_of as i64,
+                    error_details: vec![err_msg],
+                };
+            }
+        };
+
+        let conn_string = format!("DSN={};UID={};PWD={};", dsn_clone, user_clone, pwd_clone);
+        let conn = match env.connect_with_connection_string(&conn_string, ConnectionOptions::default()) {
+            Ok(c) => c,
+            Err(e) => {
+                 let err_msg = format!("Connection init error: {}", e);
+                 log_msg_inner(format!("[ERROR] {}", err_msg));
+                 return ArticleSyncResult {
+                    total_processed: total_of as i64,
+                    updated: 0,
+                    inserted: 0,
+                    errors: total_of as i64,
+                    error_details: vec![err_msg],
+                };
+            }
+        };
+
+        let mut last_progress_emit = std::time::Instant::now();
+
+        for (i, item) in of_list.iter().enumerate() {
+            let numero = &item.0;
+            if numero.trim().is_empty() {
+                continue;
+            }
+
+            let check_query = format!("SELECT Numero FROM OrdreFabrication WHERE Numero = '{}'", numero);
+            
+            let exists = match conn.execute(&check_query, ()) {
+                Ok(Some(mut cursor)) => cursor.next_row().ok().flatten().is_some(),
+                Ok(None) => false,
+                Err(e) => {
+                    log_msg_inner(format!("Check query failed for {}: {}", numero, e));
+                    false
+                }
+            };
+
+            // Prepare values
+            let v_numero = item.0.replace("'", "''");
+            let v_ligne = item.1.replace("'", "''");
+            let v_code_art = item.2.replace("'", "''");
+            let v_qty = item.3;
+            let v_desc = item.4.replace("'", "''");
+            let v_date_debut = item.5;
+            let v_date_fin = item.6;
+
+            if exists {
+                let sql = format!(
+                    "UPDATE OrdreFabrication SET NumeroLigne='{}', CodeArt='{}', Quantite={}, \
+                     Description='{}', DateDebut={}, DateFin={} WHERE Numero='{}'",
+                    v_ligne, v_code_art, v_qty, v_desc, v_date_debut, v_date_fin, v_numero
+                );
+
+                match conn.execute(&sql, ()) {
+                    Ok(_) => { updated += 1; },
+                    Err(e) => {
+                        errors += 1;
+                        if details.len() < 10 { details.push(format!("{}: {}", numero, e)); }
+                        log_msg_inner(format!("[ERROR] UPDATE {}: {}", numero, e));
+                    }
+                }
+            } else {
+                let sql = format!(
+                    "INSERT INTO OrdreFabrication (Numero, NumeroLigne, CodeArt, Quantite, Description, DateDebut, DateFin) \
+                     VALUES ('{}', '{}', '{}', {}, '{}', {}, {})",
+                    v_numero, v_ligne, v_code_art, v_qty, v_desc, v_date_debut, v_date_fin
+                );
+
+                match conn.execute(&sql, ()) {
+                    Ok(_) => { inserted += 1; },
+                    Err(e) => {
+                         errors += 1;
+                         if details.len() < 10 { details.push(format!("{}: {}", numero, e)); }
+                         log_msg_inner(format!("[ERROR] INSERT {}: {}", numero, e));
+                    }
+                }
+            };
+            
+            if last_progress_emit.elapsed().as_millis() > 50 {
+                let _ = app_handle.emit("ateis-of-sync-progress", SyncProgress {
+                    current: i + 1,
+                    total: total_of,
+                    status: format!("Processing: {}", numero),
+                });
+                last_progress_emit = std::time::Instant::now();
+            }
+
+            if (i + 1) % 50 == 0 {
+                log_msg_inner(format!("  Progression: {}/{}", i + 1, total_of));
+            }
+        }
+        
+        let _ = app_handle.emit("ateis-of-sync-progress", SyncProgress {
+            current: total_of,
+            total: total_of,
+            status: "Completed".to_string(),
+        });
+
+        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+        let footer = format!(
+            "\n{}\n[RAPPORT FINAL] TRANSFERT OF (UPSERT)\n{}\nTotal OF traites: {}\nOF mis a jour: {}\nNouveaux OF inseres: {}\nErreurs de traitement: {}\n\n{}\nSTATUT: {}\nFIN: {}\n{}\n",
+            "=".repeat(70),
+            "=".repeat(70),
+            total_of,
+            updated,
+            inserted,
+            errors,
+            "=".repeat(70),
+            if errors < total_of as i64 { "SUCCES" } else { "ECHEC" },
+            timestamp,
+            "=".repeat(70)
+        );
+        log_msg(&footer);
+
+        ArticleSyncResult {
+            total_processed: total_of as i64,
+            updated,
+            inserted,
+            errors,
+            error_details: details,
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(result)
+}
+

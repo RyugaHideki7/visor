@@ -140,7 +140,7 @@ pub(crate) const DEFAULT_ATEIS_OF_QUERY: &str = r#"SELECT
     MFG.MFGNUM_0, 
     MFG.YLIGNEOF_0, 
     MFI.ITMREF_0, 
-    MFG.EXTQTY_0, 
+    CAST(MFG.EXTQTY_0 AS FLOAT), 
     '', 
     MFG.STRDAT_0, 
     MFG.ENDDAT_0

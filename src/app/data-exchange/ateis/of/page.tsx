@@ -2,28 +2,52 @@
 
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faSave, faRotateRight, faDownload, faFolderOpen } from "@fortawesome/free-solid-svg-icons";
-import { Button, Tabs, Tab, Card, CardBody, CardHeader, Divider, Input, Textarea, Switch } from "@heroui/react";
-import { save } from "@tauri-apps/plugin-dialog";
+import { faSave, faRotateRight, faSync, faCheckCircle, faExclamationTriangle } from "@fortawesome/free-solid-svg-icons";
+import { Button, Tabs, Tab, Card, CardBody, CardHeader, Divider, Textarea, Switch, Input, Progress } from "@heroui/react";
 
-type ExportDatResult = {
-  output_path: string;
-  rows: number;
+type SyncResult = {
+  total: number;
+  inserted: number;
+  updated: number;
+  errors: number;
+  details: string[];
 };
 
-export default function AteisOfPage() {
-  const [outputPath, setOutputPath] = useState<string>("");
+type SyncProgress = {
+  current: number;
+  total: number;
+  status: string;
+};
+
+export default function AteisOFPage() {
   const [isRunning, setIsRunning] = useState(false);
-  const [result, setResult] = useState<ExportDatResult | null>(null);
+  const [result, setResult] = useState<SyncResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"export" | "sql">("export");
+  const [activeTab, setActiveTab] = useState<"sync" | "sql">("sync");
   const [sqlQuery, setSqlQuery] = useState<string>("");
   const [isSavingQuery, setIsSavingQuery] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
-  const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [autoEnabled, setAutoEnabled] = useState(false);
   const [autoIntervalSec, setAutoIntervalSec] = useState<number>(60);
+  const [progress, setProgress] = useState<SyncProgress | null>(null);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    
+    async function setupListener() {
+        // Note: Backend emits "ateis-of-sync-progress" for OF
+        unlisten = await listen<SyncProgress>("ateis-of-sync-progress", (event) => {
+            setProgress(event.payload);
+        });
+    }
+    setupListener();
+    
+    return () => {
+        if (unlisten) unlisten();
+    };
+  }, []);
 
   useEffect(() => {
     const loadQuery = async () => {
@@ -35,16 +59,11 @@ export default function AteisOfPage() {
       }
     };
 
-    const savedPath = localStorage.getItem("ateis_of_output_path");
-    if (savedPath) {
-      setOutputPath(savedPath);
-    }
-
-    const savedAuto = localStorage.getItem("ateis_of_auto_enabled");
+    const savedAuto = localStorage.getItem("ateis_of_sync_auto_enabled");
     if (savedAuto !== null) {
       setAutoEnabled(savedAuto === "true");
     }
-    const savedInterval = localStorage.getItem("ateis_of_auto_interval_sec");
+    const savedInterval = localStorage.getItem("ateis_of_sync_auto_interval_sec");
     if (savedInterval) {
       const v = Number(savedInterval);
       if (Number.isFinite(v) && v > 0) {
@@ -56,16 +75,12 @@ export default function AteisOfPage() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("ateis_of_output_path", outputPath);
-  }, [outputPath]);
-
-  useEffect(() => {
-    localStorage.setItem("ateis_of_auto_enabled", autoEnabled.toString());
+    localStorage.setItem("ateis_of_sync_auto_enabled", autoEnabled.toString());
   }, [autoEnabled]);
 
   useEffect(() => {
     if (Number.isFinite(autoIntervalSec) && autoIntervalSec > 0) {
-      localStorage.setItem("ateis_of_auto_interval_sec", autoIntervalSec.toString());
+      localStorage.setItem("ateis_of_sync_auto_interval_sec", autoIntervalSec.toString());
     }
   }, [autoIntervalSec]);
 
@@ -74,34 +89,28 @@ export default function AteisOfPage() {
     if (!Number.isFinite(autoIntervalSec) || autoIntervalSec <= 0) return;
 
     const id = setInterval(() => {
-      if (isRunning) return;
-      const pathToUse = outputPath.trim().length > 0 ? outputPath : "of.dat";
-      if (!pathToUse.trim()) return;
-      handleExport();
+      if (isRunning) return; 
+      handleSync();
     }, autoIntervalSec * 1000);
 
     return () => clearInterval(id);
-  }, [autoEnabled, autoIntervalSec, outputPath, isRunning]);
+  }, [autoEnabled, autoIntervalSec, isRunning]);
 
-  const handleExport = async () => {
+  const handleSync = async () => {
     setIsRunning(true);
     setError(null);
     setResult(null);
-    setExportStatus(null);
-
-    const pathToUse = outputPath.trim().length > 0 ? outputPath : "of.dat";
+    setProgress(null);
 
     try {
-      const res = await invoke<ExportDatResult>("export_ateis_of_dat", {
-        outputPath: pathToUse,
-      });
+      // Invoke sync_ateis_of command
+      const res = await invoke<SyncResult>("sync_ateis_of");
       setResult(res);
-      setExportStatus(`Export OK: ${res.rows} lignes → ${res.output_path}`);
     } catch (e) {
       setError(String(e));
-      setExportStatus(null);
     } finally {
       setIsRunning(false);
+      setProgress(null);
     }
   };
 
@@ -128,7 +137,7 @@ export default function AteisOfPage() {
       await invoke("reset_sql_query", { formatName: "ATEIS_OF" });
       const q = await invoke<string>("get_sql_query", { formatName: "ATEIS_OF" });
       setSqlQuery(q);
-      setSaveStatus("Requête réinitialisée (défaut)");
+      setSaveStatus("Requête réinitialisée");
     } catch (e) {
       setError(String(e));
       setSaveStatus("Erreur de réinitialisation");
@@ -141,16 +150,16 @@ export default function AteisOfPage() {
     <div className="p-8 flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
-          Data exchange · Ateis · OF
+          Data exchange · Ateis · Ordres de Fabrication (OF)
         </h1>
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-          Génère le fichier CSV (séparateur point-virgule) <code>of.dat</code> depuis SQL Server.
+          Synchronisation des OF SQL Server vers HFSQL (OrdreFabrication).
         </p>
       </div>
 
       <Tabs
         selectedKey={activeTab}
-        onSelectionChange={(key) => setActiveTab(key as "export" | "sql")}
+        onSelectionChange={(key) => setActiveTab(key as any)}
         variant="underlined"
         classNames={{
           tabList: "gap-6 w-full relative rounded-none p-0 border-b border-[var(--border-default)] flex justify-center",
@@ -159,63 +168,31 @@ export default function AteisOfPage() {
           tabContent: "group-data-[selected=true]:text-[var(--accent-primary)]",
         }}
       >
-        <Tab key="export" title="Export" />
+        <Tab key="sync" title="Synchronisation" />
         <Tab key="sql" title="Requête SQL" />
       </Tabs>
 
-      {activeTab === "export" && (
+      {activeTab === "sync" && (
         <Card className="bg-[var(--bg-secondary)] border border-[var(--border-default)]">
           <CardHeader className="flex flex-col gap-1">
             <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
-              Export
+              Synchronisation OF
             </h2>
             <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-              Indiquez le chemin de sortie, puis cliquez sur Exporter.
+              Lancez la mise à jour des ordres de fabrication dans HFSQL.
             </p>
           </CardHeader>
           <Divider />
-          <CardBody className="flex flex-col gap-4">
-            <Input
-              label="Chemin de sortie"
-              labelPlacement="outside"
-              value={outputPath}
-              onValueChange={setOutputPath}
-              placeholder="Ex: ...\\of.dat"
-              endContent={
-                <Button
-                  isIconOnly
-                  variant="light"
-                  size="sm"
-                  onPress={async () => {
-                    const selected = await save({
-                      defaultPath: (outputPath && outputPath.trim()) || "of.dat",
-                      filters: [{ name: "DAT", extensions: ["dat"] }],
-                    });
-                    if (selected) {
-                      setOutputPath(selected as string);
-                    }
-                  }}
-                  className="text-[var(--text-secondary)]"
-                >
-                  <FontAwesomeIcon icon={faFolderOpen} />
-                </Button>
-              }
-              classNames={{
-                inputWrapper: "bg-[var(--bg-tertiary)] border-[var(--border-default)]",
-                input: "text-[var(--text-primary)]",
-                label: "text-[var(--text-secondary)]",
-              }}
-            />
-
+          <CardBody className="flex flex-col gap-6">
             <div className="border border-[var(--border-default)] rounded-lg p-4 bg-[var(--bg-tertiary)] flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-4 justify-between">
                 <div className="flex items-center gap-3">
                   <Switch isSelected={autoEnabled} onValueChange={setAutoEnabled}>
-                    Auto-export
+                    Auto-synchro
                   </Switch>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                   <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
                     Intervalle (s)
                   </span>
                   <Input
@@ -228,31 +205,67 @@ export default function AteisOfPage() {
                   />
                 </div>
               </div>
-              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                Exécute l'export et écrase le fichier toutes les X secondes si un chemin est défini. Le processus saute les runs si un export est déjà en cours.
-              </p>
             </div>
 
             <Button
               color="primary"
-              startContent={<FontAwesomeIcon icon={faDownload} />}
-              onPress={handleExport}
+              startContent={!isRunning ? <FontAwesomeIcon icon={faSync} /> : null}
+              onPress={handleSync}
               isDisabled={isRunning || autoEnabled}
               isLoading={isRunning}
               className="bg-[var(--button-primary-bg)] text-white"
             >
-              {isRunning ? "Export en cours..." : "Exporter"}
+              {isRunning ? "Synchronisation..." : "Lancer la synchronisation"}
             </Button>
+            
+            {progress && isRunning && (
+                <div className="flex flex-col gap-2">
+                    <div className="flex justify-between text-xs text-[var(--text-secondary)]">
+                        <span>{progress.status}</span>
+                        <span>{Math.round((progress.current / progress.total) * 100)}%</span>
+                    </div>
+                    <Progress 
+                        size="sm"
+                        value={(progress.current / progress.total) * 100} 
+                        color="primary"
+                        aria-label="Progression synchronisation"
+                    />
+                </div>
+            )}
 
-            {exportStatus && (
-              <div className="px-4 py-2 rounded-lg text-sm bg-[var(--color-success-bg)] text-[var(--color-success)]">
-                {exportStatus}
-              </div>
+            {result && (
+               <div className="flex flex-col gap-2">
+                  <div className="grid grid-cols-4 gap-2">
+                     <div className="p-3 rounded-lg bg-[var(--bg-tertiary)] text-center border border-[var(--border-default)]">
+                        <div className="text-xs text-[var(--text-secondary)]">Total</div>
+                        <div className="text-xl font-bold text-[var(--text-primary)]">{result.total}</div>
+                     </div>
+                     <div className="p-3 rounded-lg bg-[var(--color-success-bg)] text-center border border-[var(--color-success)]/20">
+                        <div className="text-xs text-[var(--color-success)]">Insérés</div>
+                        <div className="text-xl font-bold text-[var(--color-success)]">{result.inserted}</div>
+                     </div>
+                     <div className="p-3 rounded-lg bg-[var(--color-info-bg)] text-center border border-[var(--color-info)]/20">
+                        <div className="text-xs text-[var(--color-info)]">Mis à jour</div>
+                        <div className="text-xl font-bold text-[var(--color-info)]">{result.updated}</div>
+                     </div>
+                     <div className="p-3 rounded-lg bg-[var(--color-error-bg)] text-center border border-[var(--color-error)]/20">
+                        <div className="text-xs text-[var(--color-error)]">Erreurs</div>
+                        <div className="text-xl font-bold text-[var(--color-error)]">{result.errors}</div>
+                     </div>
+                  </div>
+                  
+                  {result.details.length > 0 && (
+                      <div className="mt-2 p-3 text-xs font-mono bg-[var(--bg-tertiary)] rounded-lg text-[var(--color-error)] max-h-40 overflow-auto border border-[var(--border-default)]">
+                          {result.details.map((d, i) => <div key={i}>{d}</div>)}
+                      </div>
+                  )}
+               </div>
             )}
 
             {error && (
-              <div className="px-4 py-2 rounded-lg text-sm bg-[var(--color-error-bg)] text-[var(--color-error)]">
-                Erreur: {error}
+              <div className="px-4 py-3 rounded-lg text-sm bg-[var(--color-error-bg)] text-[var(--color-error)] flex items-center gap-2">
+                 <FontAwesomeIcon icon={faExclamationTriangle} />
+                 {error}
               </div>
             )}
           </CardBody>
@@ -266,9 +279,6 @@ export default function AteisOfPage() {
               <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
                 Requête SQL (Ateis · OF)
               </h2>
-              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                Modifiez puis sauvegardez. L'export utilisera cette requête.
-              </p>
             </div>
             <div className="flex gap-2">
               <Button
@@ -304,23 +314,15 @@ export default function AteisOfPage() {
                 input: "text-[var(--text-primary)] font-mono text-sm",
               }}
             />
-
             {saveStatus && (
-              <div
-                className={`px-4 py-2 rounded-lg text-sm ${
-                  saveStatus.toLowerCase().includes("erreur")
-                    ? "bg-[var(--color-error-bg)] text-[var(--color-error)]"
-                    : "bg-[var(--color-success-bg)] text-[var(--color-success)]"
-                }`}
-              >
+              <div className="px-4 py-2 rounded-lg text-sm bg-[var(--bg-tertiary)] text-[var(--text-primary)]">
                 {saveStatus}
               </div>
             )}
-
             {error && (
-              <div className="px-4 py-2 rounded-lg text-sm bg-[var(--color-error-bg)] text-[var(--color-error)]">
-                Erreur: {error}
-              </div>
+               <div className="px-4 py-2 rounded-lg text-sm bg-[var(--color-error-bg)] text-[var(--color-error)]">
+                 {error}
+               </div>
             )}
           </CardBody>
         </Card>
