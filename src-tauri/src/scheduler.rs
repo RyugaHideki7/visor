@@ -116,6 +116,7 @@ pub async fn start_scheduler(
                             app_handle_clone.clone(),
                             state.clone(),
                             output_path,
+                            Some(true),
                         )
                         .await;
                     }

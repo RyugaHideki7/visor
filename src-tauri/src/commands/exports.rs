@@ -36,6 +36,7 @@ pub async fn export_logitron_produit_dat(
     app: tauri::AppHandle,
     state: State<'_, DbState>,
     output_path: String,
+    is_auto: Option<bool>,
 ) -> Result<ExportDatResult, String> {
     let result = async {
         if output_path.trim().is_empty() {
@@ -180,8 +181,12 @@ pub async fn export_logitron_produit_dat(
                 .unwrap_or_else(|e| eprintln!("Failed to emit result: {}", e));
         }
         Err(e) => {
-            app.emit("logitron-produit-export-error", e)
-                .unwrap_or_else(|e| eprintln!("Failed to emit error: {}", e));
+            if is_auto != Some(true) {
+                app.emit("logitron-produit-export-error", e)
+                    .unwrap_or_else(|e| eprintln!("Failed to emit error: {}", e));
+            } else {
+                eprintln!("Suppressed auto-export error: {}", e);
+            }
         }
     }
 

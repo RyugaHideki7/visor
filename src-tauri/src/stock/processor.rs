@@ -347,6 +347,22 @@ impl StockProcessor {
         .await;
     }
 
+    fn is_connection_error(msg: &str) -> bool {
+        let lower = msg.to_lowercase();
+        lower.contains("login failed")
+            || lower.contains("échec de l'ouverture de session")
+            || lower.contains("impossible d'ouvrir la base de données")
+            || lower.contains("la connexion a échoué")
+            || lower.contains("connection")
+            || lower.contains("network")
+            || lower.contains("refused")
+            || lower.contains("timeout")
+            || lower.contains("tcp provider")
+            || lower.contains("code: 4060") // Cannot open database
+            || lower.contains("code: 18456") // Login failed
+            || lower.contains("target machine actively refused")
+    }
+
     pub async fn process_file(
         &self,
         line_id: i64,
@@ -493,22 +509,55 @@ impl StockProcessor {
                 .execute_sql_server_inserts(line_config.as_ref(), &mappings, &all_mapped_values)
                 .await
             {
-                let msg = format!("Erreur SQL Server pour {}: {}", filename, e);
-                DiskLogger::log_sql(
-                    &line_name,
-                    &log_path,
-                    "(voir détails)",
-                    &serde_json::to_string(&all_mapped_values).unwrap_or_default(),
-                    false,
-                    &msg,
-                );
-                self.add_db_log(line_id, "ERROR", "SQLServer", &msg, None)
-                    .await;
-                self.update_line_stats(line_id, false).await;
-                had_error = true;
-                error_msg = Some(msg);
+                if Self::is_connection_error(&e) {
+                    let msg = format!("Erreur connexion SQL (fichier reporté) : {}", e);
+                    DiskLogger::log_ligne(&line_name, &log_path, &msg, "WARNING");
+                    self.add_db_log(line_id, "WARNING", "SQLServer", &msg, None)
+                        .await;
+
+                    // Update line stats to ERROR for visual feedback
+                    self.update_line_stats(line_id, false).await;
+
+                    // Attempt to restore file
+                    if let Err(restore_err) = fs::rename(&temp_path, &path) {
+                        // Critical failure: cannot restore file. Must fallback to error folder to save data.
+                        let crit_msg = format!(
+                            "Echec restauration fichier après erreur connexion: {}",
+                            restore_err
+                        );
+                        DiskLogger::log_ligne(&line_name, &log_path, &crit_msg, "CRITICAL");
+                        // Let it fall through to standard error handling (move to rejected)
+                        had_error = true;
+                        error_msg = Some(format!("{} | {}", msg, crit_msg));
+                    } else {
+                        // File restored successfully.
+                        // Clean up temp dir if empty
+                        if temp_subdir.read_dir().unwrap().count() == 0 {
+                            let _ = fs::remove_dir(&temp_subdir);
+                        }
+                        return Ok(());
+                    }
+                } else {
+                    let msg = format!("Erreur SQL Server pour {}: {}", filename, e);
+                    DiskLogger::log_sql(
+                        &line_name,
+                        &log_path,
+                        "(voir détails)",
+                        &serde_json::to_string(&all_mapped_values).unwrap_or_default(),
+                        false,
+                        &msg,
+                    );
+                    self.add_db_log(line_id, "ERROR", "SQLServer", &msg, None)
+                        .await;
+                    self.update_line_stats(line_id, false).await;
+                    had_error = true;
+                    error_msg = Some(msg);
+                }
             }
         }
+
+        // If we had a connection error that successfully restored, we returned early.
+        // If we are here, it's either success or a different error/restore failed.
 
         let status = if had_error { "ERROR" } else { "SUCCESS" };
         let message = json!({

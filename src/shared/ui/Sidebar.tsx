@@ -50,10 +50,11 @@ export function Sidebar() {
           ? { duration: 0 }
           : { type: "spring", stiffness: 320, damping: 34 }
       }
-      className="flex flex-col gap-2.5 overflow-hidden whitespace-nowrap border-r border-(--border-default) bg-(--bg-secondary) text-(--text-secondary)"
+      className="flex flex-col gap-2.5 overflow-y-auto overflow-x-hidden whitespace-nowrap border-r border-(--border-default) bg-(--bg-secondary) text-(--text-secondary) scrollbar-hide"
       style={{
         padding: isExpanded ? "12px 10px" : "12px 8px",
         willChange: "width",
+        height: "100%",
       }}
     >
       <div
