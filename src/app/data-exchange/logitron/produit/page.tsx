@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faSave, faRotateRight, faDownload, faFolderOpen } from "@fortawesome/free-solid-svg-icons";
 import { Button, Tabs, Tab, Card, CardBody, CardHeader, Divider, Input, Textarea, Switch } from "@heroui/react";
 import { save } from "@tauri-apps/plugin-dialog";
+import { useSchedulerStore } from "@/stores/schedulerStore";
 
 type ExportDatResult = {
   output_path: string;
@@ -13,17 +15,22 @@ type ExportDatResult = {
 };
 
 export default function LogitronProduitPage() {
-  const [outputPath, setOutputPath] = useState<string>("");
+  const { tasks, startTask, stopTask, setTaskInterval, setTaskParam, loadIntervals, syncStatus } = useSchedulerStore();
+  const taskState = tasks["LOGITRON_PRODUIT"];
+  const outputPath = taskState?.param || "";
+
   const [isRunning, setIsRunning] = useState(false);
-  const [result, setResult] = useState<ExportDatResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"export" | "sql">("export");
   const [sqlQuery, setSqlQuery] = useState<string>("");
   const [isSavingQuery, setIsSavingQuery] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
-  const [autoEnabled, setAutoEnabled] = useState(false);
-  const [autoIntervalSec, setAutoIntervalSec] = useState<number>(60);
+
+  useEffect(() => {
+    loadIntervals();
+    syncStatus();
+  }, [loadIntervals, syncStatus]);
 
   useEffect(() => {
     const loadQuery = async () => {
@@ -34,60 +41,61 @@ export default function LogitronProduitPage() {
         console.error("Failed to load SQL query", e);
       }
     };
-
-    // load saved path
-    const savedPath = localStorage.getItem("logitron_produit_output_path");
-    if (savedPath) {
-      setOutputPath(savedPath);
-    }
-
-    const savedAuto = localStorage.getItem("logitron_produit_auto_enabled");
-    if (savedAuto !== null) {
-      setAutoEnabled(savedAuto === "true");
-    }
-    const savedInterval = localStorage.getItem("logitron_produit_auto_interval_sec");
-    if (savedInterval) {
-      const v = Number(savedInterval);
-      if (Number.isFinite(v) && v > 0) {
-        setAutoIntervalSec(v);
-      }
-    }
-
     loadQuery();
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("logitron_produit_output_path", outputPath);
-  }, [outputPath]);
+    let unlistenResult: (() => void) | undefined;
+    let unlistenError: (() => void) | undefined;
+    
+    async function setupListener() {
+        unlistenResult = await listen<ExportDatResult>("logitron-produit-export-result", (event) => {
+            const res = event.payload;
+            setExportStatus(`Export Auto OK: ${res.rows} lignes → ${res.output_path}`);
+            setError(null);
+            // Clear status after 5s
+            setTimeout(() => setExportStatus(null), 5000);
+        });
 
-  useEffect(() => {
-    localStorage.setItem("logitron_produit_auto_enabled", autoEnabled.toString());
-  }, [autoEnabled]);
-
-  useEffect(() => {
-    if (Number.isFinite(autoIntervalSec) && autoIntervalSec > 0) {
-      localStorage.setItem("logitron_produit_auto_interval_sec", autoIntervalSec.toString());
+        unlistenError = await listen<string>("logitron-produit-export-error", (event) => {
+            setError("Erreur Auto-Export: " + event.payload);
+            setExportStatus(null);
+        });
     }
-  }, [autoIntervalSec]);
+    setupListener();
+    
+    return () => {
+        if (unlistenResult) unlistenResult();
+        if (unlistenError) unlistenError();
+    };
+  }, []);
 
-  useEffect(() => {
-    if (!autoEnabled) return;
-    if (!Number.isFinite(autoIntervalSec) || autoIntervalSec <= 0) return;
+  const handleOutputPathChange = (val: string) => {
+    setTaskParam("LOGITRON_PRODUIT", val);
+  };
 
-    const id = setInterval(() => {
-      if (isRunning) return; // avoid overlapping runs
-      const pathToUse = outputPath.trim().length > 0 ? outputPath : "produit.dat";
-      if (!pathToUse.trim()) return;
-      handleExport();
-    }, autoIntervalSec * 1000);
+  const handleAutoToggle = async (enabled: boolean) => {
+    if (!taskState) return;
+    if (enabled) {
+        await startTask("LOGITRON_PRODUIT", taskState.intervalMinutes, outputPath);
+    } else {
+        await stopTask("LOGITRON_PRODUIT");
+    }
+  };
 
-    return () => clearInterval(id);
-  }, [autoEnabled, autoIntervalSec, outputPath, isRunning]);
+  const handleIntervalChange = async (v: number) => {
+    if (!taskState) return;
+    const newInterval = Math.max(1, v || 1);
+    setTaskInterval("LOGITRON_PRODUIT", newInterval);
+    if (taskState.running) {
+        await stopTask("LOGITRON_PRODUIT");
+        await startTask("LOGITRON_PRODUIT", newInterval, outputPath);
+    }
+  };
 
   const handleExport = async () => {
     setIsRunning(true);
     setError(null);
-    setResult(null);
     setExportStatus(null);
 
     const pathToUse = outputPath.trim().length > 0 ? outputPath : "produit.dat";
@@ -96,7 +104,6 @@ export default function LogitronProduitPage() {
       const res = await invoke<ExportDatResult>("export_logitron_produit_dat", {
         outputPath: pathToUse,
       });
-      setResult(res);
       setExportStatus(`Export OK: ${res.rows} lignes → ${res.output_path}`);
     } catch (e) {
       setError(String(e));
@@ -165,7 +172,7 @@ export default function LogitronProduitPage() {
       </Tabs>
 
       {activeTab === "export" && (
-        <Card className="bg-(--bg-secondary) border border-(--border-default)">
+        <Card className="bg-[var(--bg-secondary)] border border-[var(--border-default)]">
           <CardHeader className="flex flex-col gap-1">
             <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
               Export
@@ -180,7 +187,7 @@ export default function LogitronProduitPage() {
               label="Chemin de sortie"
               labelPlacement="outside"
               value={outputPath}
-              onValueChange={setOutputPath}
+              onValueChange={handleOutputPathChange}
               placeholder="Ex: ...\\produit.dat"
               endContent={
                 <Button
@@ -193,10 +200,10 @@ export default function LogitronProduitPage() {
                       filters: [{ name: "DAT", extensions: ["dat"] }],
                     });
                     if (selected) {
-                      setOutputPath(selected as string);
+                      handleOutputPathChange(selected as string);
                     }
                   }}
-                  className="text-(--text-secondary)"
+                  className="text-[var(--text-secondary)]"
                 >
                   <FontAwesomeIcon icon={faFolderOpen} />
                 </Button>
@@ -208,29 +215,29 @@ export default function LogitronProduitPage() {
               }}
             />
 
-            <div className="border border-(--border-default) rounded-lg p-4 bg-(--bg-tertiary) flex flex-col gap-2">
+            <div className="border border-[var(--border-default)] rounded-lg p-4 bg-[var(--bg-tertiary)] flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-4 justify-between">
                 <div className="flex items-center gap-3">
-                  <Switch isSelected={autoEnabled} onValueChange={setAutoEnabled}>
+                  <Switch isSelected={taskState?.running || false} onValueChange={handleAutoToggle}>
                     Auto-export
                   </Switch>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                    Intervalle (s)
+                    Intervalle (min)
                   </span>
                   <Input
                     type="number"
-                    aria-label="Intervalle (secondes)"
-                    value={autoIntervalSec.toString()}
-                    onValueChange={(v) => setAutoIntervalSec(Math.max(1, Number(v) || 0))}
+                    aria-label="Intervalle (minutes)"
+                    value={taskState?.intervalMinutes?.toString() || "60"}
+                    onValueChange={(v) => handleIntervalChange(Number(v))}
                     className="w-32"
                     min={1}
                   />
                 </div>
               </div>
               <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                Exécute l’export et écrase le fichier toutes les X secondes si un chemin est défini. Le processus saute les runs si un export est déjà en cours.
+                Exécute l’export et écrase le fichier toutes les X minutes si un chemin est défini.
               </p>
             </div>
 
@@ -238,21 +245,21 @@ export default function LogitronProduitPage() {
               color="primary"
               startContent={<FontAwesomeIcon icon={faDownload} />}
               onPress={handleExport}
-              isDisabled={isRunning || autoEnabled}
+              isDisabled={isRunning || (taskState?.running || false)}
               isLoading={isRunning}
-              className="bg-(--button-primary-bg) text-white"
+              className="bg-[var(--button-primary-bg)] text-white"
             >
               {isRunning ? "Export en cours..." : "Exporter"}
             </Button>
 
             {exportStatus && (
-              <div className="px-4 py-2 rounded-lg text-sm bg-(--color-success-bg) text-(--color-success)">
+              <div className="px-4 py-2 rounded-lg text-sm bg-[var(--color-success-bg)] text-[var(--color-success)]">
                 {exportStatus}
               </div>
             )}
 
             {error && (
-              <div className="px-4 py-2 rounded-lg text-sm bg-(--color-error-bg) text-(--color-error)">
+              <div className="px-4 py-2 rounded-lg text-sm bg-[var(--color-error-bg)] text-[var(--color-error)]">
                 Erreur: {error}
               </div>
             )}
@@ -261,7 +268,7 @@ export default function LogitronProduitPage() {
       )}
 
       {activeTab === "sql" && (
-        <Card className="bg-(--bg-secondary) border border-(--border-default)">
+        <Card className="bg-[var(--bg-secondary)] border border-[var(--border-default)]">
           <CardHeader className="flex justify-between items-start gap-4">
             <div className="flex flex-col gap-1">
               <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -277,7 +284,7 @@ export default function LogitronProduitPage() {
                 startContent={<FontAwesomeIcon icon={faRotateRight} />}
                 onPress={handleResetQuery}
                 isDisabled={isSavingQuery}
-                className="border-(--border-default) text-(--text-primary)"
+                className="border-[var(--border-default)] text-[var(--text-primary)]"
               >
                 Réinitialiser
               </Button>
@@ -286,7 +293,7 @@ export default function LogitronProduitPage() {
                 startContent={<FontAwesomeIcon icon={faSave} />}
                 onPress={handleSaveQuery}
                 isLoading={isSavingQuery}
-                className="bg-(--button-primary-bg) text-white"
+                className="bg-[var(--button-primary-bg)] text-white"
               >
                 Sauvegarder
               </Button>
@@ -310,8 +317,8 @@ export default function LogitronProduitPage() {
               <div
                 className={`px-4 py-2 rounded-lg text-sm ${
                   saveStatus.toLowerCase().includes("erreur")
-                    ? "bg-(--color-error-bg) text-(--color-error)"
-                    : "bg-(--color-success-bg) text-(--color-success)"
+                    ? "bg-[var(--color-error-bg)] text-[var(--color-error)]"
+                    : "bg-[var(--color-success-bg)] text-[var(--color-success)]"
                 }`}
               >
                 {saveStatus}
@@ -319,7 +326,7 @@ export default function LogitronProduitPage() {
             )}
 
             {error && (
-              <div className="px-4 py-2 rounded-lg text-sm bg-(--color-error-bg) text-(--color-error)">
+              <div className="px-4 py-2 rounded-lg text-sm bg-[var(--color-error-bg)] text-[var(--color-error)]">
                 Erreur: {error}
               </div>
             )}

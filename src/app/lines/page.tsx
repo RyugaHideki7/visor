@@ -101,7 +101,7 @@ export default function LinesPage() {
 
     const handleSave = async (line: LineFormData) => {
 
-        const lineId = await invoke<number>("save_line", { line });
+        await invoke<number>("save_line", { line });
 
         setEditingLine(null);
         fetchLines();

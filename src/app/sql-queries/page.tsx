@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faSave, faRotateRight } from "@fortawesome/free-solid-svg-icons";
@@ -28,23 +28,18 @@ export default function SqlQueriesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
-  const fetchQueries = async () => {
+  const fetchQueries = useCallback(async () => {
     try {
       const result = await invoke<SqlQuery[]>("get_sql_queries");
       setQueries(result);
-      
-      const selected = result.find(q => q.format_name === selectedFormat);
-      if (selected) {
-        setCurrentQuery(selected.query_template);
-      }
     } catch (error) {
       console.error("Failed to fetch SQL queries:", error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchQueries();
-  }, []);
+  }, [fetchQueries]);
 
   useEffect(() => {
     const selected = queries.find(q => q.format_name === selectedFormat);

@@ -1,18 +1,17 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { 
-  faFilter, 
   faTrash, 
   faRefresh, 
   faCircleInfo, 
   faTriangleExclamation, 
-  faCircleXmark,
-  faCircleCheck
+  faCircleXmark, 
+  faCircleCheck 
 } from "@fortawesome/free-solid-svg-icons";
-import { Select, SelectItem, Button } from "@heroui/react";
+import { Select, SelectItem, Button, SharedSelection } from "@heroui/react";
 import { ConfirmDialog, useConfirmDialog } from "@/shared/ui/ConfirmDialog";
 
 interface LogEntry {
@@ -58,24 +57,17 @@ export default function Journaux() {
     { key: "SUCCESS", name: "Succès" },
   ], []);
 
-  const handleSelectLine = (keys: any) => {
-    const first = Array.from(keys)[0] as string | undefined;
+  const handleSelectLine = (keys: SharedSelection) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const first = Array.from(keys as any)[0] as string | undefined;
     setSelectedLineId(first ?? "");
   };
 
-  const handleSelectLevel = (keys: any) => {
-    const first = Array.from(keys)[0] as string | undefined;
+  const handleSelectLevel = (keys: SharedSelection) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const first = Array.from(keys as any)[0] as string | undefined;
     setSelectedLevel(first ?? "");
   };
-
-  useEffect(() => {
-    loadLines();
-    loadLogs();
-  }, []);
-
-  useEffect(() => {
-    loadLogs();
-  }, [selectedLineId, selectedLevel]);
 
   const loadLines = async () => {
     try {
@@ -86,7 +78,7 @@ export default function Journaux() {
     }
   };
 
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     setIsLoading(true);
     try {
       const params: { lineId?: number; level?: string; limit?: number } = { limit: 500 };
@@ -100,7 +92,15 @@ export default function Journaux() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedLineId, selectedLevel]);
+
+  useEffect(() => {
+    loadLines();
+  }, []);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
 
   const handleClearLogs = async () => {
     const confirmed = await confirmDialog.open({
@@ -158,7 +158,7 @@ export default function Journaux() {
             onPress={loadLogs}
             isIconOnly
             variant="bordered"
-            className="border-(--border-default) text-(--text-primary) hover:bg-(--bg-hover)"
+            className="border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
           >
             <FontAwesomeIcon icon={faRefresh} className={isLoading ? "animate-spin" : ""} />
           </Button>
@@ -167,7 +167,7 @@ export default function Journaux() {
             isLoading={isLoading}
             variant="bordered"
             startContent={<FontAwesomeIcon icon={faTrash} />}
-            className="border-(--border-default) text-(--text-primary) hover:bg-(--bg-hover)"
+            className="border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
           >
             Vider
           </Button>
@@ -193,7 +193,7 @@ export default function Journaux() {
           }}
         >
           {(item) => (
-            <SelectItem key={item.key} textValue={item.name} className="text-(--text-primary) hover:bg-(--bg-hover)">
+            <SelectItem key={item.key} textValue={item.name} className="text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">
               {item.name}
             </SelectItem>
           )}
@@ -212,7 +212,7 @@ export default function Journaux() {
           }}
         >
           {(item) => (
-            <SelectItem key={item.key} textValue={item.name} className="text-(--text-primary) hover:bg-(--bg-hover)">
+            <SelectItem key={item.key} textValue={item.name} className="text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">
               {item.name}
             </SelectItem>
           )}

@@ -18,6 +18,7 @@ import {
 export interface SidebarItem {
   key: string;
   label: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon: any;
   href?: string;
   children?: SidebarItem[];

@@ -186,7 +186,7 @@ export default function Settings() {
       <div>
         <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Paramètres</h1>
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-          Configuration de l'application et connexion SQL Server
+          Configuration de l&apos;application et connexion SQL Server
         </p>
       </div>
 
@@ -253,7 +253,7 @@ export default function Settings() {
           )}
           {updateStatus.state === "ready" && (
             <div style={{ color: "var(--color-success)" }}>
-              Mise à jour téléchargée. L'application va redémarrer pour appliquer la mise à jour.
+              Mise à jour téléchargée. L&apos;application va redémarrer pour appliquer la mise à jour.
             </div>
           )}
           {updateStatus.state === "uptodate" && (

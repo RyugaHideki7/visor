@@ -23,6 +23,7 @@ pub fn run_app() {
 
             // Watcher registry (prevents duplicates and enables stop/start).
             app.manage(crate::stock::WatcherState::new());
+            app.manage(crate::scheduler::SchedulerState::new());
 
             let handle = app.handle();
             let handle_clone = handle.clone();
@@ -117,7 +118,11 @@ pub fn run_app() {
             crate::commands::sql_queries::get_sql_queries,
             crate::commands::sql_queries::save_sql_query,
             crate::commands::defaults::get_default_mappings,
-            crate::commands::logs::reset_line_stats
+            crate::commands::defaults::get_default_mappings,
+            crate::commands::logs::reset_line_stats,
+            crate::scheduler::start_scheduler,
+            crate::scheduler::stop_scheduler,
+            crate::scheduler::get_scheduler_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

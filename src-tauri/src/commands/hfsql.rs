@@ -439,7 +439,7 @@ pub async fn sync_ateis_produit(app: AppHandle, state: State<'_, DbState>) -> Re
             
             // Emit progress event every 50ms or every item if slow
             if last_progress_emit.elapsed().as_millis() > 50 {
-                let _ = app_handle.emit("ateis-sync-progress", SyncProgress {
+                let _ = app_handle.emit("ateis-produit-sync-progress", SyncProgress {
                     current: i + 1,
                     total: articles.len(),
                     status: format!("Processing: {}", code_art),
@@ -453,7 +453,7 @@ pub async fn sync_ateis_produit(app: AppHandle, state: State<'_, DbState>) -> Re
         }
         
         // Final progress emit
-        let _ = app_handle.emit("ateis-sync-progress", SyncProgress {
+        let _ = app_handle.emit("ateis-produit-sync-progress", SyncProgress {
             current: articles.len(),
             total: articles.len(),
             status: "Completed".to_string(),
@@ -474,17 +474,20 @@ pub async fn sync_ateis_produit(app: AppHandle, state: State<'_, DbState>) -> Re
             timestamp,
             "=".repeat(70)
         );
-         if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path_clone) {
-             let _ = file.write_all(footer.as_bytes());
-        }
+        log_msg_inner(footer);
 
-        ArticleSyncResult {
+        let final_result = ArticleSyncResult {
             total_processed: total_articles,
             updated,
             inserted,
             errors,
             error_details,
-        }
+        };
+
+        // Emit the final result
+        let _ = app_handle.emit("ateis-produit-sync-result", &final_result);
+
+        final_result
     })
     .await
     .map_err(|e| e.to_string())?;
@@ -776,13 +779,17 @@ pub async fn sync_ateis_of(app: AppHandle, state: State<'_, DbState>) -> Result<
         );
         log_msg(&footer);
 
-        ArticleSyncResult {
+        let final_result = ArticleSyncResult {
             total_processed: total_of as i64,
             updated,
             inserted,
             errors,
             error_details: details,
-        }
+        };
+
+        let _ = app_handle.emit("ateis-of-sync-result", &final_result);
+
+        final_result
     })
     .await
     .map_err(|e| e.to_string())?;

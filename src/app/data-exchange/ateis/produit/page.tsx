@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faSave, faRotateRight, faSync, faCheckCircle, faExclamationTriangle } from "@fortawesome/free-solid-svg-icons";
+import { faSave, faRotateRight, faSync, faExclamationTriangle } from "@fortawesome/free-solid-svg-icons";
 import { Button, Tabs, Tab, Card, CardBody, CardHeader, Divider, Textarea, Switch, Input, Progress } from "@heroui/react";
-import HfsqlConfigTab from "../HfsqlConfigTab";
+
+import { useSchedulerStore } from "@/stores/schedulerStore";
 
 type SyncResult = {
   total: number;
@@ -26,21 +27,41 @@ export default function AteisProduitPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<SyncResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"sync" | "connection" | "sql">("sync");
+  const [activeTab, setActiveTab] = useState<"sync" | "sql">("sync");
   const [sqlQuery, setSqlQuery] = useState<string>("");
   const [isSavingQuery, setIsSavingQuery] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
-  const [autoEnabled, setAutoEnabled] = useState(false);
-  const [autoIntervalSec, setAutoIntervalSec] = useState<number>(60);
   const [progress, setProgress] = useState<SyncProgress | null>(null);
+
+  const { tasks, startTask, stopTask, setTaskInterval, loadIntervals, syncStatus } = useSchedulerStore();
+  const taskState = tasks["ATEIS_PRODUIT_SYNC"];
+
+  useEffect(() => {
+    loadIntervals();
+    syncStatus();
+  }, [loadIntervals, syncStatus]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     
     async function setupListener() {
-        unlisten = await listen<SyncProgress>("ateis-sync-progress", (event) => {
+        unlisten = await listen<SyncProgress>("ateis-produit-sync-progress", (event) => {
             setProgress(event.payload);
+            if (event.payload.status === "Completed") {
+                setTimeout(() => setProgress(null), 3000);
+            }
         });
+        
+        const unlistenResult = await listen<SyncResult>("ateis-produit-sync-result", (event) => {
+            setResult(event.payload);
+        });
+        
+        // Combine unlisten functions
+        const oldUnlisten = unlisten;
+        unlisten = () => {
+            oldUnlisten();
+            unlistenResult();
+        };
     }
     setupListener();
     
@@ -58,43 +79,25 @@ export default function AteisProduitPage() {
         console.error("Failed to load SQL query", e);
       }
     };
-
-    const savedAuto = localStorage.getItem("ateis_produit_sync_auto_enabled");
-    if (savedAuto !== null) {
-      setAutoEnabled(savedAuto === "true");
-    }
-    const savedInterval = localStorage.getItem("ateis_produit_sync_auto_interval_sec");
-    if (savedInterval) {
-      const v = Number(savedInterval);
-      if (Number.isFinite(v) && v > 0) {
-        setAutoIntervalSec(v);
-      }
-    }
-
     loadQuery();
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem("ateis_produit_sync_auto_enabled", autoEnabled.toString());
-  }, [autoEnabled]);
-
-  useEffect(() => {
-    if (Number.isFinite(autoIntervalSec) && autoIntervalSec > 0) {
-      localStorage.setItem("ateis_produit_sync_auto_interval_sec", autoIntervalSec.toString());
+  const handleAutoToggle = async (enabled: boolean) => {
+    if (enabled) {
+        await startTask("ATEIS_PRODUIT_SYNC", taskState.intervalMinutes);
+    } else {
+        await stopTask("ATEIS_PRODUIT_SYNC");
     }
-  }, [autoIntervalSec]);
+  };
 
-  useEffect(() => {
-    if (!autoEnabled) return;
-    if (!Number.isFinite(autoIntervalSec) || autoIntervalSec <= 0) return;
-
-    const id = setInterval(() => {
-      if (isRunning) return; 
-      handleSync();
-    }, autoIntervalSec * 1000);
-
-    return () => clearInterval(id);
-  }, [autoEnabled, autoIntervalSec, isRunning]);
+  const handleIntervalChange = async (v: number) => {
+    const newInterval = Math.max(1, v || 1);
+    setTaskInterval("ATEIS_PRODUIT_SYNC", newInterval);
+    if (taskState.running) {
+        await stopTask("ATEIS_PRODUIT_SYNC");
+        await startTask("ATEIS_PRODUIT_SYNC", newInterval);
+    }
+  };
 
   const handleSync = async () => {
     setIsRunning(true);
@@ -158,7 +161,7 @@ export default function AteisProduitPage() {
 
       <Tabs
         selectedKey={activeTab}
-        onSelectionChange={(key) => setActiveTab(key as any)}
+        onSelectionChange={(key) => setActiveTab(key as "sync" | "sql")}
         variant="underlined"
         classNames={{
           tabList: "gap-6 w-full relative rounded-none p-0 border-b border-[var(--border-default)] flex justify-center",
@@ -186,19 +189,19 @@ export default function AteisProduitPage() {
             <div className="border border-[var(--border-default)] rounded-lg p-4 bg-[var(--bg-tertiary)] flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-4 justify-between">
                 <div className="flex items-center gap-3">
-                  <Switch isSelected={autoEnabled} onValueChange={setAutoEnabled}>
+                  <Switch isSelected={taskState?.running || false} onValueChange={handleAutoToggle}>
                     Auto-synchro
                   </Switch>
                 </div>
                 <div className="flex items-center gap-2">
-                   <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                    Intervalle (s)
+                  <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                    Intervalle (min)
                   </span>
                   <Input
                     type="number"
-                    aria-label="Intervalle (secondes)"
-                    value={autoIntervalSec.toString()}
-                    onValueChange={(v) => setAutoIntervalSec(Math.max(1, Number(v) || 0))}
+                    aria-label="Intervalle (minutes)"
+                    value={taskState?.intervalMinutes?.toString() || "60"}
+                    onValueChange={(v) => handleIntervalChange(Number(v))}
                     className="w-32"
                     min={1}
                   />
@@ -210,14 +213,14 @@ export default function AteisProduitPage() {
               color="primary"
               startContent={!isRunning ? <FontAwesomeIcon icon={faSync} /> : null}
               onPress={handleSync}
-              isDisabled={isRunning || autoEnabled}
+              isDisabled={isRunning || (taskState?.running || false)}
               isLoading={isRunning}
               className="bg-[var(--button-primary-bg)] text-white"
             >
               {isRunning ? "Synchronisation..." : "Lancer la synchronisation"}
             </Button>
             
-            {progress && isRunning && (
+            {progress && (
                 <div className="flex flex-col gap-2">
                     <div className="flex justify-between text-xs text-[var(--text-secondary)]">
                         <span>{progress.status}</span>
@@ -271,14 +274,11 @@ export default function AteisProduitPage() {
         </Card>
       )}
 
-      {activeTab === "connection" && (
-        <HfsqlConfigTab />
-      )}
+
 
       {activeTab === "sql" && (
         <Card className="bg-[var(--bg-secondary)] border border-[var(--border-default)]">
           <CardHeader className="flex justify-between items-start gap-4">
-             {/* Same SQL Editor as before */}
             <div className="flex flex-col gap-1">
               <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
                 Requête SQL (Ateis · Produit)

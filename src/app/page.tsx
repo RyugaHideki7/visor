@@ -12,6 +12,7 @@ interface LineStatus {
     name: string;
     active: boolean;
     pending_files: number;
+    error_files: number;
     last_processed?: string;
     total_processed: number;
     status: "MARCHE" | "ALERTE" | "ARRET" | "ERREUR";
@@ -64,7 +65,8 @@ export default function Dashboard() {
     }, [lineStatuses, siteFilter, sortAsc]);
 
     useEffect(() => {
-        setPage(1);
+        const t = setTimeout(() => setPage(1), 0);
+        return () => clearTimeout(t);
     }, [siteFilter]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
@@ -141,6 +143,7 @@ export default function Dashboard() {
                         <TableColumn>Dernière activité</TableColumn>
                         <TableColumn>Traités</TableColumn>
                         <TableColumn>En attente</TableColumn>
+                        <TableColumn>Erreurs</TableColumn>
                     </TableHeader>
                     <TableBody emptyContent="Aucune ligne trouvée" items={paginatedItems}>
                         {(line) => {
@@ -162,11 +165,13 @@ export default function Dashboard() {
                                     <TableCell>{line.last_processed || "Jamais"}</TableCell>
                                     <TableCell className="text-(--color-success)">{line.total_processed}</TableCell>
                                     <TableCell className="text-(--color-warning)">{line.pending_files}</TableCell>
+                                    <TableCell className="text-(--color-error)">{line.error_files}</TableCell>
                                 </TableRow>
                             );
                         }}
                     </TableBody>
                 </Table>
+
             </div>
 
             {lineStatuses.length === 0 && (

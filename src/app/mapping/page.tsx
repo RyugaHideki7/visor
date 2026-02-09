@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus, faTrash } from "@fortawesome/free-solid-svg-icons";
-import { Select, SelectItem, Button, Input } from "@heroui/react";
+import { Select, SelectItem, Button, Input, type SharedSelection } from "@heroui/react";
 
 type MappingRow = {
   id?: number;
@@ -21,8 +21,9 @@ export default function MappingPage() {
   const [rows, setRows] = useState<MappingRow[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleSelectFormat = (keys: any) => {
-    const first = Array.from(keys)[0] as string | undefined;
+  const handleSelectFormat = (keys: SharedSelection) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const first = Array.from(keys as any)[0] as string | undefined;
     setSelectedFormat(first ?? "ATEIS");
   };
 
@@ -34,18 +35,14 @@ export default function MappingPage() {
     []
   );
 
-  const loadMappings = async (formatName: string) => {
+  const loadMappings = useCallback(async (formatName: string) => {
     const res = await invoke<MappingRow[]>("get_model_mappings", { formatName });
     setRows(res);
-  };
-
-  useEffect(() => {
-    loadMappings(selectedFormat).catch((e) => console.error(e));
   }, []);
 
   useEffect(() => {
     loadMappings(selectedFormat).catch((e) => console.error(e));
-  }, [selectedFormat]);
+  }, [selectedFormat, loadMappings]);
 
   const handleAddRow = () => {
     setRows((prev) => [
@@ -98,7 +95,6 @@ export default function MappingPage() {
     }
   };
 
-  const newLocal = "border-(--border-default) text-(--text-primary) hover:bg-(--bg-hover)";
   return (
     <div className="p-8 flex flex-col gap-6">
       <div className="flex justify-between items-start gap-6">
@@ -113,14 +109,14 @@ export default function MappingPage() {
             onPress={handleAddRow}
             variant="bordered"
             startContent={<FontAwesomeIcon icon={faPlus} />}
-            className="border-(--border-default) text-(--text-primary) hover:bg-(--bg-hover)"
+            className="border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
           >
             Ajouter
           </Button>
           <Button
             onPress={handleReset}
             variant="bordered"
-            className={newLocal}
+            className="border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
           >
             Réinitialiser
           </Button>
@@ -128,7 +124,7 @@ export default function MappingPage() {
             onPress={handleSave}
             isLoading={isSaving}
             color="primary"
-            className="bg-(--button-primary-bg) text-white hover:bg-(--button-primary-hover)"
+            className="bg-[var(--button-primary-bg)] text-white hover:bg-[var(--button-primary-hover)]"
           >
             Sauvegarder
           </Button>
@@ -151,7 +147,7 @@ export default function MappingPage() {
           }}
         >
           {(item) => (
-            <SelectItem key={item.key} textValue={item.name} className="text-(--text-primary) hover:bg-(--bg-hover)">
+            <SelectItem key={item.key} textValue={item.name} className="text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">
               {item.name}
             </SelectItem>
           )}
@@ -256,7 +252,7 @@ export default function MappingPage() {
                       size="sm"
                       variant="light"
                       onPress={() => handleDeleteRow(idx)}
-                      className="text-(--text-tertiary) hover:bg-(--color-error-bg) hover:text-(--color-error)"
+                      className="text-[var(--text-tertiary)] hover:bg-[var(--color-error-bg)] hover:text-[var(--color-error)]"
                       title="Supprimer"
                     >
                       <FontAwesomeIcon icon={faTrash} />

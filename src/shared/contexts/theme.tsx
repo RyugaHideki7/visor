@@ -18,20 +18,24 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    const initialTheme: Theme = stored === "light" || stored === "dark" ? stored : "dark";
-    setThemeState(initialTheme);
-    applyThemeClasses(initialTheme);
-  }, []);
-
   const applyThemeClasses = (newTheme: Theme) => {
     const root = document.documentElement;
     root.classList.remove("light", "dark");
     root.classList.add(newTheme);
     root.classList.add("text-foreground", "bg-background");
   };
+
+  useEffect(() => {
+    // Wrap in timeout to avoid synchronous setState warning
+    const timer = setTimeout(() => {
+      setMounted(true);
+      const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
+      const initialTheme: Theme = stored === "light" || stored === "dark" ? stored : "dark";
+      setThemeState(initialTheme);
+      applyThemeClasses(initialTheme);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);

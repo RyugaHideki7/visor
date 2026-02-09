@@ -10,6 +10,7 @@ pub struct DashboardLine {
     pub name: String,
     pub active: bool,
     pub pending_files: i64,
+    pub error_files: i64,
     pub last_processed: Option<String>,
     pub total_processed: i64,
     pub status: String,
@@ -17,11 +18,13 @@ pub struct DashboardLine {
 }
 
 #[tauri::command]
-pub async fn get_dashboard_snapshot(state: State<'_, DbState>) -> Result<Vec<DashboardLine>, String> {
+pub async fn get_dashboard_snapshot(
+    state: State<'_, DbState>,
+) -> Result<Vec<DashboardLine>, String> {
     let lines = sqlx::query_as::<_, Line>(
         "SELECT id, name, path, prefix, interval_check, interval_alert, archived_path, rejected_path, active, \
-                site, unite, flag_dec, code_ligne, log_path, file_format,\
-                total_traites, total_erreurs, last_file_time, etat_actuel, created_at \
+                site, unite, code_ligne, log_path, file_format,\
+                total_traites, total_erreurs, last_file_time, etat_actuel, created_at, flag_dec \
          FROM lines ORDER BY created_at DESC",
     )
     .fetch_all(&state.pool)
@@ -70,6 +73,15 @@ pub async fn get_dashboard_snapshot(state: State<'_, DbState>) -> Result<Vec<Das
             Err(_) => 0,
         };
 
+        let error_files = if let Some(path) = &line.rejected_path {
+            match std::fs::read_dir(path) {
+                Ok(rd) => rd.flatten().filter(|e| e.path().is_file()).count() as i64,
+                Err(_) => 0,
+            }
+        } else {
+            0
+        };
+
         let status = if !line.active {
             "ARRET".to_string()
         } else if let Some(lp) = &last_processed {
@@ -103,6 +115,7 @@ pub async fn get_dashboard_snapshot(state: State<'_, DbState>) -> Result<Vec<Das
             name: line.name,
             active: line.active,
             pending_files,
+            error_files,
             last_processed,
             total_processed,
             status,

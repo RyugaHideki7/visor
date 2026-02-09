@@ -4,7 +4,6 @@ import React from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronDown } from "@fortawesome/free-solid-svg-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { SIDEBAR_MENU, type SidebarItem } from "@/shared/constants/sidebar";
@@ -26,7 +25,9 @@ export function Sidebar() {
 
   useEffect(() => {
     if (!isExpanded) {
-      setOpenGroups({});
+      // Use timeout to avoid synchronoussetState warning and potential layout thrashing
+      const timer = setTimeout(() => setOpenGroups({}), 0);
+      return () => clearTimeout(timer);
     }
   }, [isExpanded]);
 
