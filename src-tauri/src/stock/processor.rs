@@ -361,6 +361,7 @@ impl StockProcessor {
             || lower.contains("code: 4060") // Cannot open database
             || lower.contains("code: 18456") // Login failed
             || lower.contains("target machine actively refused")
+            || lower.contains("sql server désactivé") // Connection disabled within app
     }
 
     pub async fn process_file(
